@@ -62,5 +62,14 @@ suite.addBatch({
   'OAUTOSYNC': 32,
   'ONOLOCK': 64,
   'OTRYLOCK': 128,
-  'ONOREPAIR': 256
+  'ONOREPAIR': 256,
+  'MSET': 0,
+  'MADD': 1,
+  'MREPLACE': 2,
+  'MAPPEND': 3,
+  'XNOLOCK': 1,
+  'XPARAMAP': 2,
+  'XPARARED': 4,
+  'XPARAFLS': 8,
+  'XNOCOMP': 256
 })).export(module);
