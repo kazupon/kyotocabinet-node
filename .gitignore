@@ -1,0 +1,13 @@
+*.dylib
+*.so
+*.o
+*.lo
+*.Makefile
+*.target.gyp.mk
+build
+out
+Release
+Debug
+node_modules
+npm-debug.log
+*.swp
