@@ -24,6 +24,7 @@
           'kyotocabinet_core'
         ],
         'sources': [
+            './src/visitor_wrap.cc',
             './src/polydb_wrap.cc',
             './src/kyotocabinet.cc'
         ],

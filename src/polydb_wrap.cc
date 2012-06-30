@@ -1,3 +1,8 @@
+/*
+ * polydb wapper
+ * Copyright (C) 2012 kazuya kawaguchi. See Copyright Notice in kyotocabinet.h
+ */
+
 #define BUILDING_NODE_EXTENSION
 
 #include <node.h>
