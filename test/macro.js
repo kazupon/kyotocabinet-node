@@ -4,11 +4,31 @@
 
 var assert = require('assert');
 var format = require('util').format;
+var EventEmitter = require('events').EventEmitter;
 
 
 // 
 // macro(s)
 //
+
+var promiser = function () {
+  var args = arguments;
+  return function () {
+    var promise = new EventEmitter();
+    process.nextTick(function () {
+      promise.emit.apply(promise, args);
+    });
+    return promise;
+  }
+};
+
+var emitter = function (cb) {
+  var promise = new EventEmitter();
+  process.nextTick(function () {
+    cb(promise);
+  });
+  return promise;
+};
 
 var makeCheckConstantContext = function (obj, const_name, val) {
   var context = {};
@@ -34,6 +54,8 @@ var makeCheckConstantContexts = function (obj, const_pairs) {
 };
 
 module.exports = {
+  promiser: promiser,
+  emitter: emitter,
   makeCheckConstantContext: makeCheckConstantContext,
   makeCheckConstantContexts: makeCheckConstantContexts
 };

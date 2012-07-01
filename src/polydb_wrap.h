@@ -23,6 +23,16 @@ class PolyDBWrap : public ObjectWrap {
     ~PolyDBWrap();
 
     static Handle<Value> New(const Arguments &args);
+    static Handle<Value> Open(const Arguments &args);
+    static Handle<Value> Close(const Arguments &args);
+
+    static Persistent<FunctionTemplate> ctor;
+    static Persistent<String> code_symbol;
+
+    static void OnWork(uv_work_t *work_req);
+    static void OnWorkDone(uv_work_t *work_req);
+
+    PolyDB *db_;
 };
 
 #endif /* POLYDB_WRAP_H */

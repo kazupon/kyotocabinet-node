@@ -15,6 +15,7 @@
                 'defines': [ 'DEBUG', '_DEBUG' ]
             },
             'Release': {
+                'defines': [ 'NDEBUG' ]
             }
         },
     },
@@ -24,6 +25,7 @@
           'kyotocabinet_core'
         ],
         'sources': [
+            './src/debug.c',
             './src/error_wrap.cc',
             './src/visitor_wrap.cc',
             './src/polydb_wrap.cc',
