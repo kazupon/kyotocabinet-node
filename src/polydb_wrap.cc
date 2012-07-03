@@ -72,10 +72,29 @@ Handle<Value> PolyDBWrap::Open(const Arguments &args) {
   open_req->type = KC_OPEN;
   open_req->result = PolyDB::Error::SUCCESS;
   open_req->wrapdb = obj;
-  String::Utf8Value str(args[0]->ToObject()->Get(String::NewSymbol("path"))->ToString());
-  open_req->path = *str;
-  open_req->mode = args[0]->ToObject()->Get(String::NewSymbol("mode"))->Uint32Value();
-  open_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+
+  if (args.Length() == 0) {
+    String::Utf8Value str(String::NewSymbol(":")->ToString());
+    open_req->path = *str;
+    open_req->mode = 0;
+  } else if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      String::Utf8Value str(String::NewSymbol(":")->ToString());
+      open_req->path = *str;
+      open_req->mode = 0;
+      open_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
+      String::Utf8Value str(args[0]->ToObject()->Get(String::NewSymbol("path"))->ToString());
+      open_req->path = *str;
+      open_req->mode = args[0]->ToObject()->Get(String::NewSymbol("mode"))->Uint32Value();
+      open_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+    }
+  } else {
+    String::Utf8Value str(args[0]->ToObject()->Get(String::NewSymbol("path"))->ToString());
+    open_req->path = *str;
+    open_req->mode = args[0]->ToObject()->Get(String::NewSymbol("mode"))->Uint32Value();
+    open_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
 
   uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
   uv_req->data = open_req;
@@ -98,7 +117,10 @@ Handle<Value> PolyDBWrap::Close(const Arguments &args) {
   close_req->type = KC_CLOSE;
   close_req->result = PolyDB::Error::SUCCESS;
   close_req->wrapdb = obj;
-  close_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+
+  if (args.Length() > 0 && args[0]->IsFunction()) {
+    close_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+  }
   
   uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
   uv_req->data = close_req;
@@ -123,6 +145,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
     case KC_OPEN:
       {
         kc_open_req_t *open_req = static_cast<kc_open_req_t *>(work_req->data);
+        TRACE("open: path = %s, mode = %d\n", open_req->path, open_req->mode);
         if (!db->open(std::string(open_req->path), open_req->mode)) {
           req->result = db->error().code();
         }
@@ -158,12 +181,14 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     argv[0] = Local<Value>::New(Null());
   }
 
-  TryCatch try_catch;
-  //req->cb->Call(Context::GetCurrent()->Global(), 1, argv);
-  MakeCallback(wrapdb->handle_, req->cb, 1, argv);
-  if (try_catch.HasCaught()) {
-    FatalException(try_catch);
-  }
+  if (!req->cb.IsEmpty()) {
+    TryCatch try_catch;
+    //req->cb->Call(Context::GetCurrent()->Global(), 1, argv);
+    MakeCallback(wrapdb->handle_, req->cb, 1, argv);
+    if (try_catch.HasCaught()) {
+      FatalException(try_catch);
+    }
+  } 
 
   wrapdb->Unref();
   req->cb.Dispose();

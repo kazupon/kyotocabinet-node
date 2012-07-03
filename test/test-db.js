@@ -3,7 +3,6 @@
 //
 
 var should = require('should');
-var assert = require('assert');
 var fs = require('fs');
 var checkConstants = require('./macro').checkConstants;
 var kc = require('../lib/kyotocabinet');
@@ -74,14 +73,11 @@ describe('DB class tests', function () {
         it('will catch `success` callback', function (done) {
           db.open(function (err) {
             if (err) { done(err); }
-            done();
+            db.close(function (err) {
+              if (err) { done(err); }
+              done();
+            });
           });
-        });
-      });
-      describe('with specific `nothing`', function () {
-        it('shoule returned `this` object', function (done) {
-          db.open().should.eql(db);
-          done();
         });
       });
     });
