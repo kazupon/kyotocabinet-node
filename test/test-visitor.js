@@ -2,11 +2,9 @@
 // import(s)
 //
 
-var vows = require('vows');
+var should = require('should');
 var assert = require('assert');
-var events = require('events');
-var makeCheckConstantContext = require('./macro').makeCheckConstantContext;
-var makeCheckConstantContexts = require('./macro').makeCheckConstantContexts;
+var checkConstants = require('./macro').checkConstants;
 var kc = require('../lib/kyotocabinet');
 var DB = kc.DB;
 var Visitor = kc.Visitor;
@@ -16,15 +14,19 @@ var Visitor = kc.Visitor;
 // test(s)
 //
 
-var suite = vows.describe('kyotocabinet.Visitor tests');
-suite.addBatch({
-  'when create Visitor object by `new` operator': {
-    topic: new Visitor(),
-    'should create a Visitor object': function (vtr) {
-      assert.isObject(vtr);
-    }
-  }
-}).addBatch(makeCheckConstantContexts(Visitor, {
-  'NOP': 0,
-  'REMOVE': 1
-})).export(module);
+describe('Visitor constants tests', function () {
+  checkConstants(Visitor, {
+    'NOP': 0,
+    'REMOVE': 1
+  });
+});
+
+describe('Visitor class tests', function () {
+  var visitor;
+  describe('when create Visitor object by `new` operator', function () {
+    it('should create a Visitor object', function () {
+      visitor = new Visitor();
+      visitor.should.be.an.instanceOf(Visitor);
+    });
+  });
+});

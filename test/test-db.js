@@ -2,12 +2,10 @@
 // import(s)
 //
 
-var vows = require('vows');
+var should = require('should');
 var assert = require('assert');
 var fs = require('fs');
-var emitter = require('./macro').emitter;
-var makeCheckConstantContext = require('./macro').makeCheckConstantContext;
-var makeCheckConstantContexts = require('./macro').makeCheckConstantContexts;
+var checkConstants = require('./macro').checkConstants;
 var kc = require('../lib/kyotocabinet');
 var DB = kc.DB;
 var Error = kc.Error;
@@ -17,87 +15,86 @@ var Error = kc.Error;
 // test(s)
 //
 
-var suite = vows.describe('kyotocabinet.DB tests');
-suite.addBatch(makeCheckConstantContexts(DB, {
-  'OREADER': 1,
-  'OWRITER': 2,
-  'OCREATE': 4,
-  'OTRUNCATE': 8,
-  'OAUTOTRAN': 16,
-  'OAUTOSYNC': 32,
-  'ONOLOCK': 64,
-  'OTRYLOCK': 128,
-  'ONOREPAIR': 256,
-  'MSET': 0,
-  'MADD': 1,
-  'MREPLACE': 2,
-  'MAPPEND': 3,
-  'XNOLOCK': 1,
-  'XPARAMAP': 2,
-  'XPARARED': 4,
-  'XPARAFLS': 8,
-  'XNOCOMP': 256
-})).addBatch({
-  'when create DB object by `new` operator': {
-    topic: new DB(),
-    'should create a DB object': function (db) {
-      assert.isObject(db);
-    },
-    teardown: function () {
-      fs.unlink('casket.kct', this.callback.bind(this));
-    },
-    'when call `open` method': {
-      'with specific path -> `casket.kct`, mode -> `OREADER + OWRITER + OCREATE`': {
-        topic: function (db) {
-          this.db = db;
-          return emitter(function (promise) {
-            db.open({
-              path: 'casket.kct',
-              mode: DB.OREADER + DB.OWRITER + DB.OCREATE
-            }, promise.emit.bind(promise, 'open'));
-            promise.emit('success');
+describe('DB constants tests', function () {
+  checkConstants(DB, {
+    'OREADER': 1,
+    'OWRITER': 2,
+    'OCREATE': 4,
+    'OTRUNCATE': 8,
+    'OAUTOTRAN': 16,
+    'OAUTOSYNC': 32,
+    'ONOLOCK': 64,
+    'OTRYLOCK': 128,
+    'ONOREPAIR': 256,
+    'MSET': 0,
+    'MADD': 1,
+    'MREPLACE': 2,
+    'MAPPEND': 3,
+    'XNOLOCK': 1,
+    'XPARAMAP': 2,
+    'XPARARED': 4,
+    'XPARAFLS': 8,
+    'XNOCOMP': 256
+  });
+});
+
+describe('DB class tests', function () {
+  var db;
+  describe('when create DB object by `new` operator', function () {
+    it('should create a DB object', function () {
+      db = new DB();
+      db.should.be.an.instanceOf(DB);
+    });
+    afterEach(function (done) {
+      fs.unlink('casket.kct', function (err) {
+        done();
+      });
+    });
+    describe('when call `open` method', function () {
+      describe('with specific path -> `casket.kct`, mode -> `OREADER + OWRITER + OCREATE` object', function () {
+        it('will catch `success` callback', function (done) {
+          db.open({
+            path: 'casket.kct',
+            mode: DB.OREADER + DB.OWRITER + DB.OCREATE
+          }, function (err) {
+            if (err) { done(err); }
+            done();
           });
-        },
-        on: {
-          'open': {
-            'will catch `success`': function (topic) {
-              assert.isNull(topic);
-            },
-            'when call `close` method': {
-              topic: function () {
-                var db = this.db;
-                return emitter(function (promise) {
-                  db.close(promise.emit.bind(promise, 'close'));
-                  promise.emit('success');
-                });
-              },
-              on: {
-                'close': {
-                  'will catch `success`': function (topic) {
-                    assert.isNull(topic);
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    'when call `close` method': {
-      topic: function (db) {
-        return emitter(function (promise) {
-          db.close(promise.emit.bind(promise, 'close'));
-          promise.emit('success');
         });
-      },
-      on: {
-        'close': {
-          'will catch `error`': function (topic) {
-            assert.isNotNull(topic);
-            assert.equal(Error.INVALID, topic.code);
-          }
-        }
-      }
-    }
-  }
-}).export(module);
+        describe('when call `close` method', function () {
+          it('will catch `success` callback', function (done) {
+            db.close(function (err) {
+              if (err) { done(err); }
+              done();
+            });
+          });
+        });
+      });
+      describe('with specific params nothing', function () {
+        it('will catch `success` callback', function (done) {
+          db.open(function (err) {
+            if (err) { done(err); }
+            done();
+          });
+        });
+      });
+      describe('with specific `nothing`', function () {
+        it('shoule returned `this` object', function (done) {
+          db.open().should.eql(db);
+          done();
+        });
+      });
+    });
+    describe('when call `close` method', function () {
+      it('will catch `err` callback', function (done) {
+        db.close(function (err) {
+          err.should.be.a('object');
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+  });
+});
+

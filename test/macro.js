@@ -2,61 +2,28 @@
 // import(s)
 //
 
+var should = require('should');
 var assert = require('assert');
 var format = require('util').format;
-var EventEmitter = require('events').EventEmitter;
 
 
 // 
 // macro(s)
 //
 
-var promiser = function () {
-  var args = arguments;
-  return function () {
-    var promise = new EventEmitter();
-    process.nextTick(function () {
-      promise.emit.apply(promise, args);
-    });
-    return promise;
-  }
-};
-
-var emitter = function (cb) {
-  var promise = new EventEmitter();
-  process.nextTick(function () {
-    cb(promise);
-  });
-  return promise;
-};
-
-var makeCheckConstantContext = function (obj, const_name, val) {
-  var context = {};
-  context = {
-    topic: obj[const_name],
-    'should be defined': function (val) {
-      assert.isDefined(val);
-    }
-  };
-  var _val = val;
-  context[format('should be `%d`', _val)] = function (val) {
-    assert.equal(_val, val);
-  };
-  return context;
-};
-
-var makeCheckConstantContexts = function (obj, const_pairs) {
-  var batch = {};
+var checkConstants = function (target, const_pairs) {
   for (var const_name in const_pairs) {
-    batch[format('`%s` constant', const_name)] = makeCheckConstantContext(obj, const_name, const_pairs[const_name]);
+    var desc_name = format('`%s` constant', const_name);
+    var expected_msg = format('should equal `%d`', const_pairs[const_name]);
+    describe(desc_name, function () {
+      it(expected_msg, function () {
+        target[const_name].should.eql(const_pairs[const_name]);
+      });
+    });
   }
-  return batch;
 };
 
 module.exports = {
-  promiser: promiser,
-  emitter: emitter,
-  makeCheckConstantContext: makeCheckConstantContext,
-  makeCheckConstantContexts: makeCheckConstantContexts
+  checkConstants: checkConstants
 };
 
