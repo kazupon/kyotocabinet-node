@@ -345,7 +345,7 @@ describe('DB class tests', function () {
     // add
     //
     describe('when call `add` method', function () {
-      it('will catch `success` callback into `true` value', function (done) {
+      it('will catch `success` callback', function (done) {
         db1.add({ key: 'hoge1', value: '111' }, function (err) {
           if (err) { done(err); }
           done();
@@ -361,7 +361,7 @@ describe('DB class tests', function () {
         });
       });
       describe('when call `add` method', function () {
-        it('with catch `success` callback into `false` value', function (done) {
+        it('with catch `success` callback', function (done) {
           db1.add({ key: 'hoge1', value: '222' }, function (err) {
             //console.log(err);
             err.should.be.a('object');
@@ -414,6 +414,85 @@ describe('DB class tests', function () {
         it('should catch `TypeError` exception', function (done) {
           try {
             db1.add(1);
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+    });
+
+
+    // 
+    // append
+    //
+    describe('when call `append` method', function () {
+      it('will catch `success` callback', function (done) {
+        db1.append({ key: 'hoge2', value: 'hello' }, function (err) {
+          if (err) { done(err); }
+          done();
+        });
+      });
+      describe('when call `get` method', function () {
+        it('with catch `success` callback into `hello` value', function (done) {
+          db1.get({ key: 'hoge2' }, function (err, value) {
+            if (err) { done(err); }
+            value.should.eql('hello');
+            done();
+          });
+        });
+      });
+      describe('when call `append` method', function () {
+        it('with catch `success` callback', function (done) {
+          db1.append({ key: 'hoge2', value: ',world' }, function (err) {
+            if (err) { done(err); }
+            done();
+          });
+        });
+        describe('when call `get` method', function () {
+          it('with catch `success` callback into `hello,world` value', function (done) {
+            db1.get({ key: 'hoge2' }, function (err, value) {
+              if (err) { done(err); }
+              value.should.eql('hello,world');
+              done();
+            });
+          });
+        });
+      });
+      describe('with no specific `key`', function () {
+        it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
+          db1.append({}, function (err) {
+            //console.log(err);
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+      describe('with no specific parameter', function () {
+        it('should catch `Error` exception', function (done) {
+          try {
+            db1.append();
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+      describe('with specific `key` type not string', function () {
+        it('should catch `TypeError` exception', function (done) {
+          try {
+            db1.append({ key: 1 });
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+      describe('with specific parameter not object', function () {
+        it('should catch `TypeError` exception', function (done) {
+          try {
+            db1.append(1);
           } catch (e) {
             e.should.be.an.instanceOf(TypeError);
             done();
