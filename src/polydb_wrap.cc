@@ -14,6 +14,141 @@ using namespace v8;
 namespace kc = kyotocabinet;
 
 
+#define DEFINE_FUNC(Name, Type)                                             \
+  Handle<Value> PolyDBWrap::Name(const Arguments &args) {                   \
+    HandleScope scope;                                                      \
+                                                                            \
+    PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());          \
+    assert(obj != NULL);                                                    \
+                                                                            \
+    kc_req_t *req = (kc_req_t *)malloc(sizeof(kc_req_t));                   \
+    req->type = Type;                                                       \
+    req->result = PolyDB::Error::SUCCESS;                                   \
+    req->wrapdb = obj;                                                      \
+                                                                            \
+    if (args.Length() > 0 && args[0]->IsFunction()) {                       \
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0])); \
+    }                                                                       \
+                                                                            \ 
+    uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));             \
+    uv_req->data = req;                                                     \
+                                                                            \
+    int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone); \
+    TRACE("uv_queue_work: ret=%d\n", ret);                                  \
+                                                                            \
+    obj->Ref();                                                             \
+    return args.This();                                                     \
+  }                                                                         \
+
+
+#define DEFINE_KV_FUNC(Name, Type)                                              \
+  Handle<Value> PolyDBWrap::Name(const Arguments &args) {                       \
+    HandleScope scope;                                                          \
+                                                                                \
+    PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());              \
+    assert(obj != NULL);                                                        \
+                                                                                \
+    Local<String> key_sym = String::NewSymbol("key");                           \
+    Local<String> value_sym = String::NewSymbol("value");                       \
+    if ((args.Length() == 0)                                                    \
+        || (args.Length() == 1                                                  \
+          && (!args[0]->IsObject()) | !args[0]->IsFunction())                   \
+        || (args.Length() == 1                                                  \
+          && args[0]->IsObject()                                                \ 
+          && args[0]->ToObject()->Has(key_sym)                                  \ 
+          && !args[0]->ToObject()->Get(key_sym)->IsString())                    \
+        || (args.Length() == 1                                                  \ 
+          && args[0]->IsObject()                                                \ 
+          && args[0]->ToObject()->Has(value_sym)                                \ 
+          && !args[0]->ToObject()->Get(value_sym)->IsString())                  \
+        || (args.Length() == 2                                                  \ 
+          && (!args[0]->IsObject() || !args[1]->IsFunction()))                  \
+        || (args.Length() == 2                                                  \ 
+          && args[0]->IsObject()                                                \ 
+          && args[0]->ToObject()->Has(key_sym)                                  \ 
+          && !args[0]->ToObject()->Get(key_sym)->IsString())                    \
+        || (args.Length() == 2                                                  \
+          && args[0]->IsObject()                                                \ 
+          && args[0]->ToObject()->Has(value_sym)                                \ 
+          && !args[0]->ToObject()->Get(value_sym)->IsString())) {               \
+      ThrowException(Exception::TypeError(String::New("Bad argument")));        \
+      return args.This();                                                       \
+    }                                                                           \
+                                                                                \
+    kc_kv_req_t *req = (kc_kv_req_t *)malloc(sizeof(kc_kv_req_t));              \
+    req->type = Type;                                                           \
+    req->result = PolyDB::Error::SUCCESS;                                       \
+    req->wrapdb = obj;                                                          \
+    req->key = NULL;                                                            \
+    req->value = NULL;                                                          \
+                                                                                \
+    if (args.Length() == 1) {                                                   \
+      if (args[0]->IsFunction()) {                                              \
+        req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));   \
+      } else {                                                                  \
+        assert(args[0]->IsObject());                                            \
+        if (args[0]->ToObject()->Has(key_sym)) {                                \
+          String::Utf8Value key(args[0]->ToObject()->Get(key_sym));             \
+          req->key = kc::strdup(*key);                                          \
+        }                                                                       \
+        if (args[0]->ToObject()->Has(value_sym)) {                              \
+          String::Utf8Value value(args[0]->ToObject()->Get(value_sym));         \
+          req->value = kc::strdup(*value);                                      \
+        }                                                                       \
+      }                                                                         \
+    } else {                                                                    \
+      assert(args[0]->IsObject() && args[1]->IsFunction());                     \
+      if (args[0]->ToObject()->Has(key_sym)) {                                  \
+        String::Utf8Value key(args[0]->ToObject()->Get(key_sym));               \
+        req->key = kc::strdup(*key);                                            \
+      }                                                                         \
+      if (args[0]->ToObject()->Has(value_sym)) {                                \
+        String::Utf8Value value(args[0]->ToObject()->Get(value_sym));           \
+        req->value = kc::strdup(*value);                                        \
+      }                                                                         \
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));     \
+    }                                                                           \
+                                                                                \ 
+    uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));                 \
+    uv_req->data = req;                                                         \
+                                                                                \
+    int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);     \
+    TRACE("uv_queue_work: ret=%d\n", ret);                                      \
+                                                                                \
+    obj->Ref();                                                                 \
+    return args.This();                                                         \
+  }                                                                             \
+
+#define DO_EXECUTE(Method)              \
+  if (!db->Method()) {                  \
+    req->result = db->error().code();   \
+  }                                     \
+
+#define DO_KV_EXECUTE(Method, work_req)                           \
+  kc_kv_req_t *req = static_cast<kc_kv_req_t *>(work_req->data);  \
+  TRACE("key = %s, value = %s\n", req->key, req->value);          \
+  if (req->key == NULL || req->value == NULL) {                   \
+    req->result = PolyDB::Error::INVALID;                         \
+  } else {                                                        \
+    if (!db->Method(req->key, strlen(req->key),                   \
+                    req->value, strlen(req->value))) {            \
+      req->result = db->error().code();                           \
+    }                                                             \
+  }                                                               \
+
+#define KV_FREE(work_req)                                         \
+  kc_kv_req_t *req = static_cast<kc_kv_req_t *>(work_req->data);  \
+  if (req->key != NULL) {                                         \
+    free(req->key);                                               \
+    req->key = NULL;                                              \
+  }                                                               \
+  if (req->value != NULL) {                                       \
+    free(req->value);                                             \
+    req->value = NULL;                                            \
+  }                                                               \
+  free(req);                                                      \
+
+
 // request type
 enum kc_req_type {
   KC_OPEN,
@@ -52,6 +187,12 @@ typedef struct kc_set_req_t {
   char *key;
   char *value;
 } kc_set_req_t, kc_get_req_t, kc_add_req_t, kc_append_req_t, kc_replace_req_t;
+
+typedef struct kc_kv_req_t {
+  KC_REQ_FIELD
+  char *key;
+  char *value;
+} kc_kv_req_t;
 
 // remove request
 typedef struct kc_remove_req_t {
@@ -128,95 +269,8 @@ Handle<Value> PolyDBWrap::Open(const Arguments &args) {
   return args.This();
 }
 
-Handle<Value> PolyDBWrap::Close(const Arguments &args) {
-  TRACE("Close\n");
-  HandleScope scope;
-
-  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
-  assert(obj != NULL);
-
-  kc_req_t *close_req = (kc_req_t *)malloc(sizeof(kc_req_t));
-  close_req->type = KC_CLOSE;
-  close_req->result = PolyDB::Error::SUCCESS;
-  close_req->wrapdb = obj;
-
-  if (args.Length() > 0 && args[0]->IsFunction()) {
-    close_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
-  }
-  
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = close_req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
-
-  obj->Ref();
-  return args.This();
-}
-
-Handle<Value> PolyDBWrap::Set(const Arguments &args) {
-  TRACE("Set\n");
-  HandleScope scope;
-
-  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
-  assert(obj != NULL);
-
-  Local<String> key_sym = String::NewSymbol("key");
-  Local<String> value_sym = String::NewSymbol("value");
-  if ( (args.Length() == 0) ||
-       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(value_sym) && !args[0]->ToObject()->Get(value_sym)->IsString()) ||
-       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(value_sym) && !args[0]->ToObject()->Get(value_sym)->IsString()) ) {
-    ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
-  }
-
-  kc_set_req_t *set_req = (kc_set_req_t *)malloc(sizeof(kc_set_req_t));
-  set_req->type = KC_SET;
-  set_req->result = PolyDB::Error::SUCCESS;
-  set_req->wrapdb = obj;
-  set_req->key = NULL;
-  set_req->value = NULL;
-
-  if (args.Length() == 1) {
-    if (args[0]->IsFunction()) {
-      set_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
-    } else {
-      assert(args[0]->IsObject());
-      if (args[0]->ToObject()->Has(key_sym)) {
-        String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
-        set_req->key = kc::strdup(*key);
-      }
-      if (args[0]->ToObject()->Has(value_sym)) {
-        String::Utf8Value value(args[0]->ToObject()->Get(value_sym));
-        set_req->value = kc::strdup(*value);
-      }
-    }
-  } else {
-    assert(args[0]->IsObject() && args[1]->IsFunction());
-    if (args[0]->ToObject()->Has(key_sym)) {
-      String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
-      set_req->key = kc::strdup(*key);
-    }
-    if (args[0]->ToObject()->Has(value_sym)) {
-      String::Utf8Value value(args[0]->ToObject()->Get(value_sym));
-      set_req->value = kc::strdup(*value);
-    }
-    set_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
-  }
-  
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = set_req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
-
-  obj->Ref();
-  return args.This();
-}
+DEFINE_FUNC(Close, KC_CLOSE);
+DEFINE_KV_FUNC(Set, KC_SET);
 
 Handle<Value> PolyDBWrap::Get(const Arguments &args) {
   TRACE("Get\n");
@@ -270,159 +324,9 @@ Handle<Value> PolyDBWrap::Get(const Arguments &args) {
   return args.This();
 }
 
-Handle<Value> PolyDBWrap::Clear(const Arguments &args) {
-  TRACE("Clear\n");
-  HandleScope scope;
-
-  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
-  assert(obj != NULL);
-
-  kc_req_t *clear_req = (kc_req_t *)malloc(sizeof(kc_req_t));
-  clear_req->type = KC_CLEAR;
-  clear_req->result = PolyDB::Error::SUCCESS;
-  clear_req->wrapdb = obj;
-
-  if (args.Length() > 0 && args[0]->IsFunction()) {
-    clear_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
-  }
-  
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = clear_req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
-
-  obj->Ref();
-  return args.This();
-}
-
-Handle<Value> PolyDBWrap::Add(const Arguments &args) {
-  TRACE("Add\n");
-  HandleScope scope;
-
-  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
-  assert(obj != NULL);
-
-  Local<String> key_sym = String::NewSymbol("key");
-  Local<String> value_sym = String::NewSymbol("value");
-  if ( (args.Length() == 0) ||
-       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(value_sym) && !args[0]->ToObject()->Get(value_sym)->IsString()) ||
-       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(value_sym) && !args[0]->ToObject()->Get(value_sym)->IsString()) ) {
-    ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
-  }
-
-  kc_add_req_t *add_req = (kc_add_req_t *)malloc(sizeof(kc_add_req_t));
-  add_req->type = KC_ADD;
-  add_req->result = PolyDB::Error::SUCCESS;
-  add_req->wrapdb = obj;
-  add_req->key = NULL;
-  add_req->value = NULL;
-
-  if (args.Length() == 1) {
-    if (args[0]->IsFunction()) {
-      add_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
-    } else {
-      assert(args[0]->IsObject());
-      if (args[0]->ToObject()->Has(key_sym)) {
-        String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
-        add_req->key = kc::strdup(*key);
-      }
-      if (args[0]->ToObject()->Has(value_sym)) {
-        String::Utf8Value value(args[0]->ToObject()->Get(value_sym));
-        add_req->value = kc::strdup(*value);
-      }
-    }
-  } else {
-    assert(args[0]->IsObject() && args[1]->IsFunction());
-    if (args[0]->ToObject()->Has(key_sym)) {
-      String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
-      add_req->key = kc::strdup(*key);
-    }
-    if (args[0]->ToObject()->Has(value_sym)) {
-      String::Utf8Value value(args[0]->ToObject()->Get(value_sym));
-      add_req->value = kc::strdup(*value);
-    }
-    add_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
-  }
-  
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = add_req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
-
-  obj->Ref();
-  return args.This();
-}
-
-Handle<Value> PolyDBWrap::Append(const Arguments &args) {
-  TRACE("Append\n");
-  HandleScope scope;
-
-  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
-  assert(obj != NULL);
-
-  Local<String> key_sym = String::NewSymbol("key");
-  Local<String> value_sym = String::NewSymbol("value");
-  if ( (args.Length() == 0) ||
-       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(value_sym) && !args[0]->ToObject()->Get(value_sym)->IsString()) ||
-       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(value_sym) && !args[0]->ToObject()->Get(value_sym)->IsString()) ) {
-    ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
-  }
-
-  kc_append_req_t *append_req = (kc_append_req_t *)malloc(sizeof(kc_append_req_t));
-  append_req->type = KC_APPEND;
-  append_req->result = PolyDB::Error::SUCCESS;
-  append_req->wrapdb = obj;
-  append_req->key = NULL;
-  append_req->value = NULL;
-
-  if (args.Length() == 1) {
-    if (args[0]->IsFunction()) {
-      append_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
-    } else {
-      assert(args[0]->IsObject());
-      if (args[0]->ToObject()->Has(key_sym)) {
-        String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
-        append_req->key = kc::strdup(*key);
-      }
-      if (args[0]->ToObject()->Has(value_sym)) {
-        String::Utf8Value value(args[0]->ToObject()->Get(value_sym));
-        append_req->value = kc::strdup(*value);
-      }
-    }
-  } else {
-    assert(args[0]->IsObject() && args[1]->IsFunction());
-    if (args[0]->ToObject()->Has(key_sym)) {
-      String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
-      append_req->key = kc::strdup(*key);
-    }
-    if (args[0]->ToObject()->Has(value_sym)) {
-      String::Utf8Value value(args[0]->ToObject()->Get(value_sym));
-      append_req->value = kc::strdup(*value);
-    }
-    append_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
-  }
-  
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = append_req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
-
-  obj->Ref();
-  return args.This();
-}
+DEFINE_FUNC(Clear, KC_CLEAR);
+DEFINE_KV_FUNC(Add, KC_ADD);
+DEFINE_KV_FUNC(Append, KC_APPEND);
 
 Handle<Value> PolyDBWrap::Remove(const Arguments &args) {
   TRACE("Remove\n");
@@ -475,69 +379,7 @@ Handle<Value> PolyDBWrap::Remove(const Arguments &args) {
   return args.This();
 }
 
-Handle<Value> PolyDBWrap::Replace(const Arguments &args) {
-  TRACE("Replace\n");
-  HandleScope scope;
-
-  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
-  assert(obj != NULL);
-
-  Local<String> key_sym = String::NewSymbol("key");
-  Local<String> value_sym = String::NewSymbol("value");
-  if ( (args.Length() == 0) ||
-       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(value_sym) && !args[0]->ToObject()->Get(value_sym)->IsString()) ||
-       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(value_sym) && !args[0]->ToObject()->Get(value_sym)->IsString()) ) {
-    ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
-  }
-
-  kc_replace_req_t *replace_req = (kc_replace_req_t *)malloc(sizeof(kc_replace_req_t));
-  replace_req->type = KC_REPLACE;
-  replace_req->result = PolyDB::Error::SUCCESS;
-  replace_req->wrapdb = obj;
-  replace_req->key = NULL;
-  replace_req->value = NULL;
-
-  if (args.Length() == 1) {
-    if (args[0]->IsFunction()) {
-      replace_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
-    } else {
-      assert(args[0]->IsObject());
-      if (args[0]->ToObject()->Has(key_sym)) {
-        String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
-        replace_req->key = kc::strdup(*key);
-      }
-      if (args[0]->ToObject()->Has(value_sym)) {
-        String::Utf8Value value(args[0]->ToObject()->Get(value_sym));
-        replace_req->value = kc::strdup(*value);
-      }
-    }
-  } else {
-    assert(args[0]->IsObject() && args[1]->IsFunction());
-    if (args[0]->ToObject()->Has(key_sym)) {
-      String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
-      replace_req->key = kc::strdup(*key);
-    }
-    if (args[0]->ToObject()->Has(value_sym)) {
-      String::Utf8Value value(args[0]->ToObject()->Get(value_sym));
-      replace_req->value = kc::strdup(*value);
-    }
-    replace_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
-  }
-  
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = replace_req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
-
-  obj->Ref();
-  return args.This();
-}
+DEFINE_KV_FUNC(Replace, KC_REPLACE);
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -560,21 +402,11 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
         break;
       }
     case KC_CLOSE:
-      if (!db->close()) {
-        req->result = db->error().code();
-      }
+      DO_EXECUTE(close);
       break;
     case KC_SET:
       {
-        kc_set_req_t *set_req = static_cast<kc_set_req_t *>(work_req->data);
-        TRACE("set: key = %s, value = %s\n", set_req->key, set_req->value);
-        if (set_req->key == NULL || set_req->value == NULL) {
-          req->result = PolyDB::Error::INVALID;
-        } else {
-          if (!db->set(set_req->key, strlen(set_req->key), set_req->value, strlen(set_req->value))) {
-            req->result = db->error().code();
-          }
-        }
+        DO_KV_EXECUTE(set, work_req);
         break;
       }
     case KC_GET:
@@ -594,34 +426,16 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
         break;
       }
     case KC_CLEAR:
-      if (!db->clear()) {
-        req->result = db->error().code();
-      }
+      DO_EXECUTE(clear);
       break;
     case KC_ADD:
       {
-        kc_add_req_t *add_req = static_cast<kc_add_req_t *>(work_req->data);
-        TRACE("add: key = %s, value = %s\n", add_req->key, add_req->value);
-        if (add_req->key == NULL || add_req->value == NULL) {
-          req->result = PolyDB::Error::INVALID;
-        } else {
-          if(!db->add(add_req->key, strlen(add_req->key), add_req->value, strlen(add_req->value))) {
-            req->result = db->error().code();
-          }
-        }
+        DO_KV_EXECUTE(add, work_req);
         break;
       }
     case KC_APPEND:
       {
-        kc_append_req_t *append_req = static_cast<kc_append_req_t *>(work_req->data);
-        TRACE("append: key = %s, value = %s\n", append_req->key, append_req->value);
-        if (append_req->key == NULL || append_req->value == NULL) {
-          req->result = PolyDB::Error::INVALID;
-        } else {
-          if(!db->append(append_req->key, strlen(append_req->key), append_req->value, strlen(append_req->value))) {
-            req->result = db->error().code();
-          }
-        }
+        DO_KV_EXECUTE(append, work_req);
         break;
       }
     case KC_REMOVE:
@@ -639,15 +453,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_REPLACE:
       {
-        kc_replace_req_t *replace_req = static_cast<kc_replace_req_t *>(work_req->data);
-        TRACE("replace: key = %s, value = %s\n", replace_req->key, replace_req->value);
-        if (replace_req->key == NULL || replace_req->value == NULL) {
-          req->result = PolyDB::Error::INVALID;
-        } else {
-          if(!db->replace(replace_req->key, strlen(replace_req->key), replace_req->value, strlen(replace_req->value))) {
-            req->result = db->error().code();
-          }
-        }
+        DO_KV_EXECUTE(replace, work_req);
         break;
       }
     default:
@@ -737,16 +543,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       break;
     case KC_SET:
       {
-        kc_set_req_t *set_req = static_cast<kc_set_req_t *>(work_req->data);
-        if (set_req->key != NULL) {
-          free(set_req->key);
-          set_req->key = NULL;
-        }
-        if (set_req->value != NULL) {
-          free(set_req->value);
-          set_req->value = NULL;
-        }
-        free(set_req);
+        KV_FREE(work_req);
         break;
       }
     case KC_GET:
@@ -765,30 +562,12 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       }
     case KC_ADD:
       {
-        kc_add_req_t *add_req = static_cast<kc_add_req_t *>(work_req->data);
-        if (add_req->key != NULL) {
-          free(add_req->key);
-          add_req->key = NULL;
-        }
-        if (add_req->value != NULL) {
-          free(add_req->value);
-          add_req->value = NULL;
-        }
-        free(add_req);
+        KV_FREE(work_req);
         break;
       }
     case KC_APPEND:
       {
-        kc_append_req_t *append_req = static_cast<kc_append_req_t *>(work_req->data);
-        if (append_req->key != NULL) {
-          free(append_req->key);
-          append_req->key = NULL;
-        }
-        if (append_req->value != NULL) {
-          free(append_req->value);
-          append_req->value = NULL;
-        }
-        free(append_req);
+        KV_FREE(work_req);
         break;
       }
     case KC_REMOVE:
@@ -803,16 +582,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       }
     case KC_REPLACE:
       {
-        kc_replace_req_t *replace_req = static_cast<kc_replace_req_t *>(work_req->data);
-        if (replace_req->key != NULL) {
-          free(replace_req->key);
-          replace_req->key = NULL;
-        }
-        if (replace_req->value != NULL) {
-          free(replace_req->value);
-          replace_req->value = NULL;
-        }
-        free(replace_req);
+        KV_FREE(work_req);
         break;
       }
     default:
