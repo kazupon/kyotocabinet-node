@@ -181,12 +181,12 @@ typedef struct kc_open_req_t {
   uint32_t mode;
 } kc_open_req_t;
 
-// set/get request
-typedef struct kc_set_req_t {
+// get request
+typedef struct kc_get_req_t {
   KC_REQ_FIELD
   char *key;
   char *value;
-} kc_set_req_t, kc_get_req_t, kc_add_req_t, kc_append_req_t, kc_replace_req_t;
+} kc_get_req_t;
 
 typedef struct kc_kv_req_t {
   KC_REQ_FIELD
