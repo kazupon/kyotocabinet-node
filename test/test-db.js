@@ -139,7 +139,6 @@ describe('DB class tests', function () {
           describe('with specific `key` -> `hoge1`', function () {
             it('should catch `success` callback into `1` value', function (done) {
               db1.get({ key: 'hoge1' }, function (err, value) {
-                //console.log(err, value);
                 if (err) { done(err); }
                 value.should.eql('1');
                 done();
@@ -159,7 +158,6 @@ describe('DB class tests', function () {
           describe('with specific `key` -> `ほげ１', function () {
             it('should catch `success` callback into `ほえ` value', function (done) {
               db1.get({ key: 'ほげ１' }, function (err, value) {
-                //console.log(err, value);
                 if (err) { done(err); }
                 value.should.eql('ほえ');
                 done();
@@ -177,7 +175,6 @@ describe('DB class tests', function () {
               describe('when call `get` method', function () {
                 it('should catch `err` callback into `NOREC` value at `code` property', function (done) {
                   db1.get({ key: 'ほげ１' }, function (err) {
-                    //console.log(err);
                     err.should.be.a('object');
                     err.should.have.property('code');
                     err.code.should.eql(Error.NOREC);
@@ -200,7 +197,6 @@ describe('DB class tests', function () {
           describe('with specific `key` -> `ほhogeげ`', function () {
             it('should catch `success` callback into `ほ1え` value', function (done) {
               db1.get({ key: 'ほhogeげ' }, function (err, value) {
-                //console.log(err, value);
                 if (err) { done(err); }
                 value.should.eql('ほ1え');
                 done();
@@ -212,7 +208,6 @@ describe('DB class tests', function () {
       describe('with no specific `key`', function () {
         it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
           db1.set({ value: '1' }, function (err) {
-            //console.log(err);
             err.should.have.property('code');
             err.code.should.eql(Error.INVALID);
             done();
@@ -222,7 +217,6 @@ describe('DB class tests', function () {
       describe('with no specific `value`', function () {
         it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
           db1.set({ key: 'hoge1' }, function (err) {
-            //console.log(err);
             err.should.have.property('code');
             err.code.should.eql(Error.INVALID);
             done();
@@ -232,7 +226,6 @@ describe('DB class tests', function () {
       describe('with no specific `key` & `value`', function () {
         it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
           db1.set({}, function (err) {
-            //console.log(err);
             err.should.have.property('code');
             err.code.should.eql(Error.INVALID);
             done();
@@ -279,6 +272,15 @@ describe('DB class tests', function () {
           }
         });
       });
+      describe('with db not open', function () {
+        it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
+          db.set({ key: 'hoge1', value: 'foo' }, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
     });
 
 
@@ -289,7 +291,6 @@ describe('DB class tests', function () {
       describe('with specific `key` -> `norecord`', function () {
         it('should catch `err` callback into `NOREC` value at `code` property', function (done) {
           db1.get({ key: 'norecord' }, function (err) {
-            //console.log(err);
             err.should.be.a('object');
             err.should.have.property('code');
             err.code.should.eql(Error.NOREC);
@@ -300,7 +301,6 @@ describe('DB class tests', function () {
       describe('with no specific `key`', function () {
         it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
           db1.get({}, function (err) {
-            //console.log(err);
             err.should.have.property('code');
             err.code.should.eql(Error.INVALID);
             done();
@@ -337,6 +337,15 @@ describe('DB class tests', function () {
           }
         });
       });
+      describe('with db not open', function () {
+        it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
+          db.get({ key: 'hoge1' }, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
     });
 
 
@@ -353,10 +362,18 @@ describe('DB class tests', function () {
       describe('when call `get` method', function () {
         it('should catch `err` callback into `NOREC` value at `code` property', function (done) {
           db1.get({ key: 'norecord' }, function (err) {
-            //console.log(err);
             err.should.be.a('object');
             err.should.have.property('code');
             err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+      });
+      describe('with db not open', function () {
+        it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
+          db.clear(function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
             done();
           });
         });
@@ -386,7 +403,6 @@ describe('DB class tests', function () {
       describe('when call `add` method', function () {
         it('with catch `success` callback', function (done) {
           db1.add({ key: 'hoge1', value: '222' }, function (err) {
-            //console.log(err);
             err.should.be.a('object');
             err.should.have.property('code');
             err.code.should.eql(Error.DUPREC);
@@ -406,7 +422,6 @@ describe('DB class tests', function () {
       describe('with no specific `key`', function () {
         it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
           db1.add({}, function (err) {
-            //console.log(err);
             err.should.have.property('code');
             err.code.should.eql(Error.INVALID);
             done();
@@ -441,6 +456,15 @@ describe('DB class tests', function () {
             e.should.be.an.instanceOf(TypeError);
             done();
           }
+        });
+      });
+      describe('with db not open', function () {
+        it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
+          db.add({ key: 'hoge1', value: '112' }, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
         });
       });
     });
@@ -485,7 +509,6 @@ describe('DB class tests', function () {
       describe('with no specific `key`', function () {
         it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
           db1.append({}, function (err) {
-            //console.log(err);
             err.should.have.property('code');
             err.code.should.eql(Error.INVALID);
             done();
@@ -522,6 +545,15 @@ describe('DB class tests', function () {
           }
         });
       });
+      describe('with db not open', function () {
+        it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
+          db.append({ key: 'hoge1', value: '112' }, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
     });
 
 
@@ -532,7 +564,6 @@ describe('DB class tests', function () {
       describe('with specific `key` -> `norecord`', function () {
         it('should catch `err` callback into `NOREC` value at `code` property', function (done) {
           db1.remove({ key: 'norecord' }, function (err) {
-            //console.log(err);
             err.should.be.a('object');
             err.should.have.property('code');
             err.code.should.eql(Error.NOREC);
@@ -543,7 +574,6 @@ describe('DB class tests', function () {
       describe('with no specific `key`', function () {
         it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
           db1.remove({}, function (err) {
-            //console.log(err);
             err.should.have.property('code');
             err.code.should.eql(Error.INVALID);
             done();
@@ -578,6 +608,15 @@ describe('DB class tests', function () {
             e.should.be.an.instanceOf(TypeError);
             done();
           }
+        });
+      });
+      describe('with db not open', function () {
+        it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
+          db.remove({ key: 'hoge1' }, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
         });
       });
     });
@@ -615,7 +654,6 @@ describe('DB class tests', function () {
       describe('with no specific `key`', function () {
         it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
           db1.replace({}, function (err) {
-            //console.log(err);
             err.should.have.property('code');
             err.code.should.eql(Error.INVALID);
             done();
@@ -652,6 +690,15 @@ describe('DB class tests', function () {
           }
         });
       });
+      describe('with db not open', function () {
+        it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
+          db.replace({ key: 'hoge1', value: 'foo' }, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
     });
 
 
@@ -686,7 +733,6 @@ describe('DB class tests', function () {
       describe('with no specific `key`', function () {
         it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
           db1.seize({}, function (err) {
-            //console.log(err);
             err.should.have.property('code');
             err.code.should.eql(Error.INVALID);
             done();
@@ -721,6 +767,15 @@ describe('DB class tests', function () {
             e.should.be.an.instanceOf(TypeError);
             done();
           }
+        });
+      });
+      describe('with db not open', function () {
+        it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
+          db.seize({ key: 'hoge3', value: 'foo' }, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
         });
       });
     });
