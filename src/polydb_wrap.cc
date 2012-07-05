@@ -160,6 +160,7 @@ enum kc_req_type {
   KC_APPEND,
   KC_REMOVE,
   KC_REPLACE,
+  KC_SEIZE,
 };
 
 // common request field
@@ -381,6 +382,57 @@ Handle<Value> PolyDBWrap::Remove(const Arguments &args) {
 
 DEFINE_KV_FUNC(Replace, KC_REPLACE);
 
+Handle<Value> PolyDBWrap::Seize(const Arguments &args) {
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> key_sym = String::NewSymbol("key");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
+       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_kv_req_t *req = (kc_kv_req_t *)malloc(sizeof(kc_kv_req_t));
+  req->type = KC_SEIZE;
+  req->result = PolyDB::Error::SUCCESS;
+  req->wrapdb = obj;
+  req->key = NULL;
+  req->value = NULL;
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
+      assert(args[0]->IsObject());
+      if (args[0]->ToObject()->Has(key_sym)) {
+        String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
+        req->key = kc::strdup(*key);
+      }
+    }
+  } else {
+    if (args[0]->ToObject()->Has(key_sym)) {
+      String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
+      req->key = kc::strdup(*key);
+    }
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+  
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return args.This();
+}
+
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
 
@@ -456,6 +508,22 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
         DO_KV_EXECUTE(replace, work_req);
         break;
       }
+    case KC_SEIZE:
+      {
+        kc_kv_req_t *kv_req = static_cast<kc_kv_req_t *>(work_req->data);
+        TRACE("key = %s\n", kv_req->key);
+        size_t value_size;
+        if (kv_req->key == NULL) {
+          kv_req->result = PolyDB::Error::INVALID;
+        } else {
+          kv_req->value = db->seize(kv_req->key, strlen(kv_req->key), &value_size);
+          TRACE("seize: return value = %s, size = %d\n", kv_req->value, value_size);
+          if (kv_req->value == NULL) {
+            kv_req->result = db->error().code();
+          }
+        }
+        break;
+      }
     default:
       assert(0);
   }
@@ -504,6 +572,14 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         kc_get_req_t *get_req = static_cast<kc_get_req_t *>(work_req->data);
         if (get_req->value) {
           argv[argc++] = String::New(get_req->value, strlen(get_req->value));
+        }
+        break;
+      }
+    case KC_SEIZE:
+      {
+        kc_kv_req_t *kv_req = static_cast<kc_kv_req_t *>(work_req->data);
+        if (kv_req->value) {
+          argv[argc++] = String::New(kv_req->value, strlen(kv_req->value));
         }
         break;
       }
@@ -585,6 +661,20 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         KV_FREE(work_req);
         break;
       }
+    case KC_SEIZE:
+      {
+        kc_kv_req_t *kv_req = static_cast<kc_kv_req_t *>(work_req->data);
+        if (kv_req->key != NULL) {
+          free(kv_req->key);
+          kv_req->key = NULL;
+        }
+        if (kv_req->value) {
+          free(kv_req->value);
+          kv_req->value = NULL;
+        }
+        free(kv_req);
+        break;
+      }
     default:
       assert(0);
   }
@@ -615,6 +705,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("append"), FunctionTemplate::New(Append)->GetFunction());
   prottpl->Set(String::NewSymbol("remove"), FunctionTemplate::New(Remove)->GetFunction());
   prottpl->Set(String::NewSymbol("replace"), FunctionTemplate::New(Replace)->GetFunction());
+  prottpl->Set(String::NewSymbol("seize"), FunctionTemplate::New(Seize)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);

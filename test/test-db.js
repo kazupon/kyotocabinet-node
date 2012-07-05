@@ -653,6 +653,77 @@ describe('DB class tests', function () {
         });
       });
     });
+
+
+    // 
+    // seize
+    //
+    describe('when call `seize` method', function () {
+      describe('with specific `key` -> `hoge3`', function () {
+        it('should catch `success` callback', function (done) {
+          db1.seize({ key: 'hoge3' }, function (err, value) {
+            if (err) { done(err); }
+            value.should.eql('replace');
+            db1.get({ key: 'hoge3' }, function (err) {
+              err.should.be.a('object');
+              err.should.have.property('code');
+              err.code.should.eql(Error.NOREC);
+              done();
+            });
+          });
+        });
+      });
+      describe('with specific `key` -> `norecord`', function () {
+        it('should catch `err` callback into `NOREC` value at `code` property', function (done) {
+          db1.seize({ key: 'norecord' }, function (err) {
+            err.should.be.a('object');
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+      });
+      describe('with no specific `key`', function () {
+        it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
+          db1.seize({}, function (err) {
+            //console.log(err);
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+      describe('with no specific parameter', function () {
+        it('should catch `Error` exception', function (done) {
+          try {
+            db1.seize();
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+      describe('with specific `key` type not string', function () {
+        it('should catch `TypeError` exception', function (done) {
+          try {
+            db1.seize({ key: 1 });
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+      describe('with specific parameter not object', function () {
+        it('should catch `TypeError` exception', function (done) {
+          try {
+            db1.seize(1);
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+    });
   });
 });
 
