@@ -20,6 +20,7 @@ enum kc_req_type {
   KC_CLOSE,
   KC_SET,
   KC_GET,
+  KC_CLEAR,
 };
 
 // common request field
@@ -259,6 +260,32 @@ Handle<Value> PolyDBWrap::Get(const Arguments &args) {
   return args.This();
 }
 
+Handle<Value> PolyDBWrap::Clear(const Arguments &args) {
+  TRACE("Clear\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  kc_req_t *clear_req = (kc_req_t *)malloc(sizeof(kc_req_t));
+  clear_req->type = KC_CLEAR;
+  clear_req->result = PolyDB::Error::SUCCESS;
+  clear_req->wrapdb = obj;
+
+  if (args.Length() > 0 && args[0]->IsFunction()) {
+    clear_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+  }
+  
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = clear_req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return args.This();
+}
+
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
 
@@ -313,6 +340,11 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
         }
         break;
       }
+    case KC_CLEAR:
+      if (!db->clear()) {
+        req->result = db->error().code();
+      }
+      break;
     default:
       assert(0);
   }
@@ -392,6 +424,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         break;
       }
     case KC_CLOSE:
+    case KC_CLEAR:
       free(req);
       break;
     case KC_SET:
@@ -447,6 +480,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("close"), FunctionTemplate::New(Close)->GetFunction());
   prottpl->Set(String::NewSymbol("set"), FunctionTemplate::New(Set)->GetFunction());
   prottpl->Set(String::NewSymbol("get"), FunctionTemplate::New(Get)->GetFunction());
+  prottpl->Set(String::NewSymbol("clear"), FunctionTemplate::New(Clear)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);

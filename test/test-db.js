@@ -103,6 +103,7 @@ describe('DB class tests', function () {
         });
       });
     });
+
     describe('when call `close` method', function () {
       it('will catch `err` callback into `INVALID` value at `code` property', function (done) {
         db.close(function (err) {
@@ -113,6 +114,7 @@ describe('DB class tests', function () {
         });
       });
     });
+
     describe('when call `set` method', function () {
       describe('with specific `key` -> `hoge1`, `value` -> `1`', function () {
         it('should catch `success` callback', function (done) {
@@ -298,6 +300,27 @@ describe('DB class tests', function () {
         });
       });
     });
+
+    describe('when call `clear` method', function () {
+      it('will catch `success` callback', function (done) {
+        db1.clear(function (err) {
+          if (err) { done(err); }
+          done();
+        });
+      });
+      describe('when call `get` method', function () {
+        it('should catch `err` callback into `NOREC` value at `code` property', function (done) {
+          db1.get({ key: 'norecord' }, function (err) {
+            //console.log(err);
+            err.should.be.a('object');
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+      });
+    });
+
   });
 });
 
