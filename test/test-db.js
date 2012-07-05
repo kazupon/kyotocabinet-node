@@ -582,6 +582,77 @@ describe('DB class tests', function () {
       });
     });
 
+
+    //
+    // replace
+    //
+    describe('when call `replace` method', function () {
+      describe('with specific `key` -> `hoge3`, `value` -> `replace`', function () {
+        it('should catch `success` callback', function (done) {
+          db1.set({ key: 'hoge3', value: '1' }, function (err) {
+            if (err) { done(err); }
+            db1.replace({ key: 'hoge3', value: 'replace' }, function (err) {
+              if (err) { done(err); }
+              db1.get({ key: 'hoge3' }, function (err, value) {
+                if (err) { done(err); }
+                value.should.eql('replace');
+                done();
+              });
+            });
+          });
+        });
+      });
+      describe('with specific `key` -> `norecord`', function () {
+        it('should catch `err` callback into `NOREC` value at `code` property', function (done) {
+          db1.replace({ key: 'norecord', value: 'norecord' }, function (err) {
+            err.should.be.a('object');
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+      });
+      describe('with no specific `key`', function () {
+        it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
+          db1.replace({}, function (err) {
+            //console.log(err);
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+      describe('with no specific parameter', function () {
+        it('should catch `Error` exception', function (done) {
+          try {
+            db1.replace();
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+      describe('with specific `key` type not string', function () {
+        it('should catch `TypeError` exception', function (done) {
+          try {
+            db1.replace({ key: 1 });
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+      describe('with specific parameter not object', function () {
+        it('should catch `TypeError` exception', function (done) {
+          try {
+            db1.replace(1);
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+    });
   });
 });
 
