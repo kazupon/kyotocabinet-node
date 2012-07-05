@@ -71,6 +71,7 @@ describe('DB class tests', function () {
       db.should.be.an.instanceOf(DB);
     });
 
+
     // 
     // open
     // 
@@ -106,6 +107,7 @@ describe('DB class tests', function () {
         });
       });
     });
+
 
     // 
     // close
@@ -161,6 +163,27 @@ describe('DB class tests', function () {
                 if (err) { done(err); }
                 value.should.eql('ほえ');
                 done();
+              });
+            });
+          });
+          describe('when call `remove` method', function () {
+            describe('with specific `key` -> `ほげ１', function () {
+              it('should catch `success` callback', function (done) {
+                db1.remove({ key: 'ほげ１' }, function (err) {
+                  if (err) { done(err); }
+                  done();
+                });
+              });
+              describe('when call `get` method', function () {
+                it('should catch `err` callback into `NOREC` value at `code` property', function (done) {
+                  db1.get({ key: 'ほげ１' }, function (err) {
+                    //console.log(err);
+                    err.should.be.a('object');
+                    err.should.have.property('code');
+                    err.code.should.eql(Error.NOREC);
+                    done();
+                  });
+                });
               });
             });
           });
@@ -297,7 +320,7 @@ describe('DB class tests', function () {
       describe('with specific `key` type not string', function () {
         it('should catch `TypeError` exception', function (done) {
           try {
-            db1.set({ key: 1 });
+            db1.get({ key: 1 });
           } catch (e) {
             e.should.be.an.instanceOf(TypeError);
             done();
@@ -307,7 +330,7 @@ describe('DB class tests', function () {
       describe('with specific parameter not object', function () {
         it('should catch `TypeError` exception', function (done) {
           try {
-            db1.set(1);
+            db1.get(1);
           } catch (e) {
             e.should.be.an.instanceOf(TypeError);
             done();
@@ -493,6 +516,64 @@ describe('DB class tests', function () {
         it('should catch `TypeError` exception', function (done) {
           try {
             db1.append(1);
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+    });
+
+
+    //
+    // remove
+    //
+    describe('when call `remove` method', function () {
+      describe('with specific `key` -> `norecord`', function () {
+        it('should catch `err` callback into `NOREC` value at `code` property', function (done) {
+          db1.remove({ key: 'norecord' }, function (err) {
+            //console.log(err);
+            err.should.be.a('object');
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+      });
+      describe('with no specific `key`', function () {
+        it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
+          db1.remove({}, function (err) {
+            //console.log(err);
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+      describe('with no specific parameter', function () {
+        it('should catch `Error` exception', function (done) {
+          try {
+            db1.remove();
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+      describe('with specific `key` type not string', function () {
+        it('should catch `TypeError` exception', function (done) {
+          try {
+            db1.remove({ key: 1 });
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+      describe('with specific parameter not object', function () {
+        it('should catch `TypeError` exception', function (done) {
+          try {
+            db1.remove(1);
           } catch (e) {
             e.should.be.an.instanceOf(TypeError);
             done();
