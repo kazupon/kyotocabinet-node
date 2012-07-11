@@ -219,6 +219,14 @@ namespace kc = kyotocabinet;
   }                                                               \
   free(req);                                                      \
 
+#define K_FREE(work_req, REQ_TYPE)                          \
+  REQ_TYPE *req = static_cast<REQ_TYPE *>(work_req->data);  \
+  if (req->key != NULL) {                                   \
+    free(req->key);                                         \
+    req->key = NULL;                                        \
+  }                                                         \
+  free(req);                                                \
+
 
 // request type
 enum kc_req_type {
@@ -744,6 +752,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
 
   wrapdb->Unref();
   req->cb.Dispose();
+  req->wrapdb = NULL;
 
   switch (req->type) {
     case KC_OPEN:
@@ -767,39 +776,14 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_SEIZE:
       { KV_FREE(work_req); break; }
     case KC_REMOVE:
-      {
-        kc_remove_req_t *remove_req = static_cast<kc_remove_req_t *>(work_req->data);
-        if (remove_req->key != NULL) {
-          free(remove_req->key);
-          remove_req->key = NULL;
-        }
-        free(remove_req);
-        break;
-      }
+      { K_FREE(work_req, kc_remove_req_t); break; }
     case KC_INCREMENT:
-      {
-        kc_increment_req_t *inc_req = static_cast<kc_increment_req_t *>(work_req->data);
-        if (inc_req->key != NULL) {
-          free(inc_req->key);
-          inc_req->key = NULL;
-        }
-        free(inc_req);
-        break;
-      }
+      { K_FREE(work_req, kc_increment_req_t); break; }
     case KC_INCREMENT_DOUBLE:
-      {
-        kc_increment_double_req_t *inc_dbl_req = static_cast<kc_increment_double_req_t *>(work_req->data);
-        if (inc_dbl_req->key != NULL) {
-          free(inc_dbl_req->key);
-          inc_dbl_req->key = NULL;
-        }
-        free(inc_dbl_req);
-        break;
-      }
+      { K_FREE(work_req, kc_increment_double_req_t); break; }
     default:
       assert(0);
   }
-  req->wrapdb = NULL;
   work_req->data = NULL;
 
   free(work_req);
