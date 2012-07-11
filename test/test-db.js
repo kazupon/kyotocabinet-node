@@ -45,14 +45,12 @@ describe('DB class tests', function () {
     db1 = new DB();
     db1.open({ path: "casket1.kct", mode: DB.OWRITER + DB.OCREATE }, function (err) {
       if (err) { done(err); }
-      log('db1 open');
       done();
     });
   });
   after(function (done) {
     db1.close(function (err) {
       if (err) { done(err); }
-      log('db1.close');
       fs.unlink("casket1.kct", function () {
         done();
       });
@@ -1370,6 +1368,75 @@ describe('DB class tests', function () {
         });
       });
     });
+
+
+    // 
+    // count
+    //
+    describe('db not open', function () {
+      it('should be `INVALID` error', function (done) {
+        var cdb = new DB();
+        cdb.count(function (err, ret) {
+          ret.should.eql(-1);
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var cdb;
+      var fname = 'count.kch';
+      before(function (done) {
+        cdb = new DB();
+        cdb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        cdb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function () {
+            done();
+          });
+        });
+      });
+      describe('when not regist record in db', function () {
+        it('should be `0` value', function (done) {
+          cdb.count(function (err, ret) {
+            if (err) { return done(err); }
+            ret.should.eql(0);
+            done();
+          });
+        });
+        describe('when add record', function () {
+          it('should be `1` value', function (done) {
+            cdb.add({ key: 'hoge', value: 'hello' }, function (err) {
+              if (err) { return done(err); }
+              cdb.count(function (err, ret) {
+                if (err) { return done(err); }
+                ret.should.eql(1);
+                done();
+              });
+            });
+          });
+          describe('when remove record', function () {
+            it('should be `0` value', function (done) {
+              cdb.remove({ key: 'hoge' }, function (err) {
+                if (err) { return done(err); }
+                cdb.count(function (err, ret) {
+                  if (err) { return done(err); }
+                  ret.should.eql(0);
+                  done();
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+
 
   });
 });

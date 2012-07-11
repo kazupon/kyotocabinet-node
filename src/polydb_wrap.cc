@@ -40,6 +40,33 @@ namespace kc = kyotocabinet;
     return args.This();                                                     \
   }                                                                         \
 
+#define DEFINE_RET_FUNC(Name, Type)                                         \
+  Handle<Value> PolyDBWrap::Name(const Arguments &args) {                   \
+    HandleScope scope;                                                      \
+                                                                            \
+    PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());          \
+    assert(obj != NULL);                                                    \
+                                                                            \
+    kc_ret_req_t *req = (kc_ret_req_t *)malloc(sizeof(kc_ret_req_t));       \
+    req->type = Type;                                                       \
+    req->result = PolyDB::Error::SUCCESS;                                   \
+    req->wrapdb = obj;                                                      \
+    req->ret = -1;                                                          \
+                                                                            \
+    if (args.Length() > 0 && args[0]->IsFunction()) {                       \
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0])); \
+    }                                                                       \
+                                                                            \ 
+    uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));             \
+    uv_req->data = req;                                                     \
+                                                                            \
+    int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone); \
+    TRACE("uv_queue_work: ret=%d\n", ret);                                  \
+                                                                            \
+    obj->Ref();                                                             \
+    return args.This();                                                     \
+  }                                                                         \
+
 #define DEFINE_KV_K_ONLY(Name, Type)                                            \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                       \
     HandleScope scope;                                                          \
@@ -243,6 +270,7 @@ enum kc_req_type {
   KC_INCREMENT,
   KC_INCREMENT_DOUBLE,
   KC_CAS,
+  KC_COUNT,
 };
 
 // common request field
@@ -301,6 +329,11 @@ typedef struct kc_cas_req_t {
   char *nval;
 } kc_cas_req_t;
 
+// return value common request
+typedef struct kc_ret_req_t {
+  KC_REQ_FIELD
+  int64_t ret;
+} kc_ret_req_t;
 
 
 PolyDBWrap::PolyDBWrap() {
@@ -665,6 +698,8 @@ Handle<Value> PolyDBWrap::Cas(const Arguments &args) {
   return args.This();
 }
 
+DEFINE_RET_FUNC(Count, KC_COUNT);
+
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -766,6 +801,15 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
         }
         break;
       }
+    case KC_COUNT:
+      {
+        kc_ret_req_t *ret_req = static_cast<kc_ret_req_t *>(work_req->data);
+        ret_req->ret = db->count();
+        if (ret_req->ret == -1) {
+          ret_req->result = db->error().code();
+        }
+        break;
+      }
     default:
       assert(0);
   }
@@ -836,6 +880,12 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         }
         break;
       }
+    case KC_COUNT:
+      {
+        kc_ret_req_t *ret_req = static_cast<kc_ret_req_t*>(work_req->data);
+        argv[argc++] = Number::New(ret_req->ret);
+        break;
+      }
     default:
       break;
   }
@@ -869,6 +919,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       }
     case KC_CLOSE:
     case KC_CLEAR:
+    case KC_COUNT:
       free(req);
       break;
     case KC_SET:
@@ -935,6 +986,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("increment"), FunctionTemplate::New(Increment)->GetFunction());
   prottpl->Set(String::NewSymbol("increment_double"), FunctionTemplate::New(IncrementDouble)->GetFunction());
   prottpl->Set(String::NewSymbol("cas"), FunctionTemplate::New(Cas)->GetFunction());
+  prottpl->Set(String::NewSymbol("count"), FunctionTemplate::New(Count)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);
