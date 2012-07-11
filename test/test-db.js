@@ -1246,7 +1246,7 @@ describe('DB class tests', function () {
           });
         });
         describe('with specific `key` -> `cas_no_record`, `oval` -> `hello`, `nval` -> `world`', function () {
-          it('should be `error`', function (done) {
+          it('should be `LOGIC` error', function (done) {
             db1.cas({ key: 'cas_no_record', oval: 'hello', nval: 'world' }, function (err) {
               err.should.have.property('code');
               err.code.should.eql(Error.LOGIC);
@@ -1255,7 +1255,7 @@ describe('DB class tests', function () {
           });
         });
         describe('with specific `key` -> `cas_no_record`, `oval` -> `hello` (ommit `nval`)', function () {
-          it('should be `error`', function (done) {
+          it('should be `LOGIC` error', function (done) {
             db1.cas({ key: 'cas_no_record', oval: 'hello' }, function (err) {
               err.should.have.property('code');
               err.code.should.eql(Error.LOGIC);
@@ -1298,7 +1298,7 @@ describe('DB class tests', function () {
           });
         });
         describe('with specific `key` -> `cas_record`, `oval` -> `hello`, `nval` -> `5678`', function () {
-          it('should be `error`', function (done) {
+          it('should be `LOGIC` error', function (done) {
             db1.cas({ key: 'cas_record', oval: 'hello', nval: '5678' }, function (err) {
               err.should.have.property('code');
               err.code.should.eql(Error.LOGIC);
@@ -1319,7 +1319,7 @@ describe('DB class tests', function () {
           });
         });
         describe('with specific `key` -> `cas_record`, `nval` -> `5678` (ommit `oval`)', function () {
-          it('should be `error`', function (done) {
+          it('should be `LOGIC` error', function (done) {
             db1.cas({ key: 'cas_record', nval: '5678' }, function (err) {
               err.should.have.property('code');
               err.code.should.eql(Error.LOGIC);
@@ -1329,7 +1329,47 @@ describe('DB class tests', function () {
         });
       });
     });
-
+    describe('when call `cas` method', function () {
+      describe('with no specific `key`', function () {
+        it('should be `INVALID` error', function (done) {
+          db1.cas({}, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+      describe('with no specific parameter', function () {
+        it('should occured `Error` exception', function (done) {
+          try {
+            db1.cas();
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+      describe('with specific `key` type not string', function () {
+        it('should occured `TypeError` exception', function (done) {
+          try {
+            db1.cas({ key: 1 });
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+      describe('with specific parameter not object', function () {
+        it('should occured `TypeError` exception', function (done) {
+          try {
+            db1.cas(1);
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+    });
 
   });
 });
