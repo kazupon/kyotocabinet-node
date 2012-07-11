@@ -779,6 +779,216 @@ describe('DB class tests', function () {
         });
       });
     });
+
+
+    // 
+    // increment
+    //
+    describe('when call `increment` method', function () {
+      describe('and no record', function () {
+        afterEach(function (done) {
+          db1.remove({ key: 'hoge4' }, function (err) {
+            if (err) { console.error(err); }
+            done();
+          });
+        });
+        describe('with specific `key` -> `hoge4`, `num` -> `1`, `orig` -> `1`', function () {
+          it('should catch `success` callback', function (done) {
+            db1.increment({ key: 'hoge4', num: 1, orig: 1 }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql(2);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4`, `num` -> `1` (ommit `orig`)', function () {
+          it('should catch `success` callback', function (done) {
+            db1.increment({ key: 'hoge4', num: 1 }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql(1);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4`, `orig` -> `1` (ommit `num`)', function () {
+          it('should catch `success` callback', function (done) {
+            db1.increment({ key: 'hoge4', orig: 1 }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql(1);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4` (ommit `num`, `orig`)', function () {
+          it('should catch `success` callback', function (done) {
+            db1.increment({ key: 'hoge4' }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql(0);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4`, `num` -> `10`, `orig` -> negative infinity', function () {
+          it('should catch `error` callback', function (done) {
+            db1.increment({ key: 'hoge4', num: 10, orig: Number.NEGATIVE_INFINITY }, function (err) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.LOGIC);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4`, `orig` -> negative infinity (ommit `num`)', function () {
+          it('should catch `error` callback', function (done) {
+            db1.increment({ key: 'hoge4', orig: Number.NEGATIVE_INFINITY }, function (err, value) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.LOGIC);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4`, `num` -> `10`, `orig` -> positive infinity', function () {
+          it('should catch `success` callback', function (done) {
+            db1.increment({ key: 'hoge4', num: 10, orig: Number.POSITIVE_INFINITY }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql(10);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4`, `orig` -> positive infinity (ommit `num`)', function () {
+          it('should catch `success` callback', function (done) {
+            db1.increment({ key: 'hoge4', orig: Number.POSITIVE_INFINITY }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql(0);
+              done();
+            });
+          });
+        });
+      });
+      describe('and already numeric record', function () {
+        beforeEach(function (done) {
+          db1.remove({ key: 'hoge4already' }, function (err) {
+            if (err) { console.error(err); }
+            db1.increment({ key: 'hoge4already', num: 11, orig: 0 }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4already`, `num` -> `1`, `orig` -> `1`', function () {
+          it('should catch `success` callback', function (done) {
+            db1.increment({ key: 'hoge4already', num: 1, orig: 1 }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql(12);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4already`, `num` -> `1` (ommit `orig`)', function () {
+          it('should catch `success` callback', function (done) {
+            db1.increment({ key: 'hoge4already', num: 1 }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql(12);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4already`, `orig` -> `1` (ommit `num`)', function () {
+          it('should catch `success` callback', function (done) {
+            db1.increment({ key: 'hoge4already', orig: 1 }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql(11);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4already` (ommit `num`, `orig`)', function () {
+          it('should catch `success` callback', function (done) {
+            db1.increment({ key: 'hoge4already' }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql(11);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4already`, `num` -> `10`, `orig` -> negative infinity', function () {
+          it('should catch `success` callback', function (done) {
+            db1.increment({ key: 'hoge4already', num: 10, orig: Number.NEGATIVE_INFINITY }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql(21);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4already`, `orig` -> negative infinity (ommit `num`)', function () {
+          it('should catch `success` callback', function (done) {
+            db1.increment({ key: 'hoge4already', orig: Number.NEGATIVE_INFINITY }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql(11);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4already`, `num` -> `10`, `orig` -> positive infinity', function () {
+          it('should catch `success` callback', function (done) {
+            db1.increment({ key: 'hoge4already', num: 10, orig: Number.POSITIVE_INFINITY }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql(10);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `hoge4already`, `orig` -> positive infinity (ommit `num`)', function () {
+          it('should catch `success` callback', function (done) {
+            db1.increment({ key: 'hoge4already', orig: Number.POSITIVE_INFINITY }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql(0);
+              done();
+            });
+          });
+        });
+      });
+      describe('with no specific `key`', function () {
+        it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
+          db1.increment({}, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+      describe('with no specific parameter', function () {
+        it('should catch `Error` exception', function (done) {
+          try {
+            db1.increment();
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+      describe('with specific `key` type not string', function () {
+        it('should catch `TypeError` exception', function (done) {
+          try {
+            db1.increment({ key: 1 });
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+      describe('with specific parameter not object', function () {
+        it('should catch `TypeError` exception', function (done) {
+          try {
+            db1.increment(1);
+          } catch (e) {
+            e.should.be.an.instanceOf(TypeError);
+            done();
+          }
+        });
+      });
+    });
   });
+
 });
 
