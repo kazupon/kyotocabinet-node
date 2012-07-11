@@ -242,6 +242,7 @@ enum kc_req_type {
   KC_SEIZE,
   KC_INCREMENT,
   KC_INCREMENT_DOUBLE,
+  KC_CAS,
 };
 
 // common request field
@@ -291,6 +292,14 @@ typedef struct kc_increment_double_req_t {
   double num;
   double orig;
 } kc_increment_double_req_t;
+
+// cas request
+typedef struct kc_cas_req_t {
+  KC_REQ_FIELD
+  char *key;
+  char *oval;
+  char *nval;
+} kc_cas_req_t;
 
 
 
@@ -577,6 +586,85 @@ Handle<Value> PolyDBWrap::IncrementDouble(const Arguments &args) {
   return args.This();
 }
 
+Handle<Value> PolyDBWrap::Cas(const Arguments &args) {
+  TRACE("Cas\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> key_sym = String::NewSymbol("key");
+  Local<String> oval_sym = String::NewSymbol("oval");
+  Local<String> nval_sym = String::NewSymbol("nval");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(oval_sym) && !args[0]->ToObject()->Get(oval_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(nval_sym) && !args[0]->ToObject()->Get(nval_sym)->IsString()) ||
+       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(oval_sym) && !args[0]->ToObject()->Get(oval_sym)->IsString()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(nval_sym) && !args[0]->ToObject()->Get(nval_sym)->IsString()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_cas_req_t *cas_req = (kc_cas_req_t *)malloc(sizeof(kc_cas_req_t));
+  cas_req->type = KC_CAS;
+  cas_req->result = PolyDB::Error::SUCCESS;
+  cas_req->wrapdb = obj;
+  cas_req->key = NULL;
+  cas_req->oval = NULL;
+  cas_req->nval = NULL;
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      cas_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
+      assert(args[0]->IsObject());
+      if (args[0]->ToObject()->Has(key_sym)) {
+        String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
+        cas_req->key = kc::strdup(*key);
+      }
+      if (args[0]->ToObject()->Has(oval_sym)) {
+        String::Utf8Value oval(args[0]->ToObject()->Get(oval_sym));
+        cas_req->oval = kc::strdup(*oval);
+      }
+      if (args[0]->ToObject()->Has(nval_sym)) {
+        String::Utf8Value nval(args[0]->ToObject()->Get(nval_sym));
+        cas_req->nval = kc::strdup(*nval);
+      }
+    }
+  } else {
+    if (args[0]->ToObject()->Has(key_sym)) {
+      String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
+      cas_req->key = kc::strdup(*key);
+    }
+    if (args[0]->ToObject()->Has(key_sym)) {
+      String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
+      cas_req->key = kc::strdup(*key);
+    }
+    if (args[0]->ToObject()->Has(oval_sym)) {
+      String::Utf8Value oval(args[0]->ToObject()->Get(oval_sym));
+      cas_req->oval = kc::strdup(*oval);
+    }
+    if (args[0]->ToObject()->Has(nval_sym)) {
+      String::Utf8Value nval(args[0]->ToObject()->Get(nval_sym));
+      cas_req->nval = kc::strdup(*nval);
+    }
+    cas_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+  
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = cas_req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return args.This();
+}
+
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -659,6 +747,21 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
             inc_dbl_req->result = db->error().code();
           } else {
             inc_dbl_req->num = num;
+          }
+        }
+        break;
+      }
+    case KC_CAS:
+      {
+        kc_cas_req_t *cas_req = static_cast<kc_cas_req_t *>(work_req->data);
+        TRACE("cas: key = %s, oval = %s, nval = %s\n", cas_req->key, cas_req->oval, cas_req->nval);
+        if (cas_req->key == NULL) {
+          cas_req->result = PolyDB::Error::INVALID;
+        } else {
+          size_t oval_len = (cas_req->oval != NULL ? strlen(cas_req->oval) : 0);
+          size_t nval_len = (cas_req->nval != NULL ? strlen(cas_req->nval) : 0);
+          if (!db->cas(cas_req->key, strlen(cas_req->key), cas_req->oval, oval_len, cas_req->nval, nval_len)) {
+            cas_req->result = db->error().code();
           }
         }
         break;
@@ -781,6 +884,24 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       { K_FREE(work_req, kc_increment_req_t); break; }
     case KC_INCREMENT_DOUBLE:
       { K_FREE(work_req, kc_increment_double_req_t); break; }
+    case KC_CAS:
+      {
+        kc_cas_req_t *cas_req = static_cast<kc_cas_req_t *>(work_req->data);
+        if (cas_req->key) {
+          free(cas_req->key);
+          cas_req->key = NULL;
+        }
+        if (cas_req->oval) {
+          free(cas_req->oval);
+          cas_req->oval = NULL;
+        }
+        if (cas_req->nval) {
+          free(cas_req->nval);
+          cas_req->nval = NULL;
+        }
+        free(req);
+        break;
+      }
     default:
       assert(0);
   }
@@ -813,6 +934,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("seize"), FunctionTemplate::New(Seize)->GetFunction());
   prottpl->Set(String::NewSymbol("increment"), FunctionTemplate::New(Increment)->GetFunction());
   prottpl->Set(String::NewSymbol("increment_double"), FunctionTemplate::New(IncrementDouble)->GetFunction());
+  prottpl->Set(String::NewSymbol("cas"), FunctionTemplate::New(Cas)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);

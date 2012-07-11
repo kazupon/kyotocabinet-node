@@ -35,6 +35,7 @@ class PolyDBWrap : public ObjectWrap {
     static Handle<Value> Seize(const Arguments &args);
     static Handle<Value> Increment(const Arguments &args);
     static Handle<Value> IncrementDouble(const Arguments &args);
+    static Handle<Value> Cas(const Arguments &args);
 
     static Persistent<FunctionTemplate> ctor;
     static Persistent<String> code_symbol;

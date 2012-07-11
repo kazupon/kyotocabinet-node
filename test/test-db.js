@@ -1232,7 +1232,105 @@ describe('DB class tests', function () {
         });
       });
     });
-  });
 
+
+    // 
+    // increment_double
+    //
+    describe('no record', function () {
+      describe('when call `cas` method', function () {
+        beforeEach(function (done) {
+          db1.remove({ key: 'cas_no_record' }, function (err) {
+            if (err) { console.error(err); }
+            done();
+          });
+        });
+        describe('with specific `key` -> `cas_no_record`, `oval` -> `hello`, `nval` -> `world`', function () {
+          it('should be `error`', function (done) {
+            db1.cas({ key: 'cas_no_record', oval: 'hello', nval: 'world' }, function (err) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.LOGIC);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `cas_no_record`, `oval` -> `hello` (ommit `nval`)', function () {
+          it('should be `error`', function (done) {
+            db1.cas({ key: 'cas_no_record', oval: 'hello' }, function (err) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.LOGIC);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `cas_no_record`, `nval` -> `world` (ommit `oval`)', function () {
+          it('should create `cas_no_record` key record', function (done) {
+            db1.cas({ key: 'cas_no_record', nval: 'world' }, function (err) {
+              if (err) { return done(err); }
+              db1.get({ key: 'cas_no_record' }, function (err, value) {
+                if (err) { return done(err); }
+                value.should.eql('world');
+                done();
+              });
+            });
+          });
+        });
+      });
+    });
+    describe('already record', function () {
+      describe('when call `cas` method', function () {
+        beforeEach(function (done) {
+          db1.set({ key: 'cas_record', value: '1234' }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        describe('with specific `key` -> `cas_record`, `oval` -> `1234`, `nval` -> `5678`', function () {
+          it('should change from `1234` to `5678` value', function (done) {
+            db1.cas({ key: 'cas_record', oval: '1234', nval: '5678' }, function (err) {
+              if (err) { return done(err); }
+              db1.get({ key: 'cas_record' }, function (err, value) {
+                if (err) { return done(err); }
+                value.should.eql('5678');
+                done();
+              });
+            });
+          });
+        });
+        describe('with specific `key` -> `cas_record`, `oval` -> `hello`, `nval` -> `5678`', function () {
+          it('should be `error`', function (done) {
+            db1.cas({ key: 'cas_record', oval: 'hello', nval: '5678' }, function (err) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.LOGIC);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` -> `cas_record`, `oval` -> `1234` (ommit `nval`)', function () {
+          it('should remove `cas_record` key record', function (done) {
+            db1.cas({ key: 'cas_record', oval: '1234' }, function (err) {
+              if (err) { return done(err); }
+              db1.get({ key: 'cas_record' }, function (err, value) {
+                err.should.have.property('code');
+                err.code.should.eql(Error.NOREC);
+                done();
+              });
+            });
+          });
+        });
+        describe('with specific `key` -> `cas_record`, `nval` -> `5678` (ommit `oval`)', function () {
+          it('should be `error`', function (done) {
+            db1.cas({ key: 'cas_record', nval: '5678' }, function (err) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.LOGIC);
+              done();
+            });
+          });
+        });
+      });
+    });
+
+
+  });
 });
 
