@@ -40,22 +40,29 @@ namespace kc = kyotocabinet;
     return args.This();                                                     \
   }                                                                         \
 
-#define DEFINE_RET_FUNC(Name, Type)                                         \
+#define DEFINE_RET_FUNC(Name, Type, REQ_TYPE, INIT_VALUE)                   \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                   \
     HandleScope scope;                                                      \
                                                                             \
     PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());          \
     assert(obj != NULL);                                                    \
                                                                             \
-    kc_ret_req_t *req = (kc_ret_req_t *)malloc(sizeof(kc_ret_req_t));       \
+    if ((args.Length() == 0)                                                \
+        || (args.Length() == 1                                              \
+          && (!args[0]->IsObject()) | !args[0]->IsFunction())) {            \
+      ThrowException(Exception::TypeError(String::New("Bad argument")));    \
+      return args.This();                                                   \
+    }                                                                       \
+                                                                            \
+    REQ_TYPE *req = (REQ_TYPE *)malloc(sizeof(REQ_TYPE));                   \
     req->type = Type;                                                       \
     req->result = PolyDB::Error::SUCCESS;                                   \
     req->wrapdb = obj;                                                      \
-    req->ret = -1;                                                          \
+    req->ret = INIT_VALUE;                                                  \
                                                                             \
-    if (args.Length() > 0 && args[0]->IsFunction()) {                       \
-      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0])); \
-    }                                                                       \
+    assert(args.Length() > 0);                                              \
+    assert(args[0]->IsFunction());                                          \
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));   \
                                                                             \ 
     uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));             \
     uv_req->data = req;                                                     \
@@ -715,35 +722,9 @@ Handle<Value> PolyDBWrap::Cas(const Arguments &args) {
   return args.This();
 }
 
-DEFINE_RET_FUNC(Count, KC_COUNT);
-DEFINE_RET_FUNC(Size, KC_SIZE);
-
-Handle<Value> PolyDBWrap::Status(const Arguments &args) {
-  TRACE("Status\n");
-  HandleScope scope;
-
-  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
-  assert(obj != NULL);
-
-  kc_strmap_ret_req_t *strmap_ret_req = (kc_strmap_ret_req_t *)malloc(sizeof(kc_strmap_ret_req_t));
-  strmap_ret_req->type = KC_STATUS;
-  strmap_ret_req->result = PolyDB::Error::SUCCESS;
-  strmap_ret_req->wrapdb = obj;
-  strmap_ret_req->ret = NULL;
-
-  if (args.Length() > 0 && args[0]->IsFunction()) {
-    strmap_ret_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
-  }
-
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = strmap_ret_req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
-
-  obj->Ref();
-  return args.This();
-}
+DEFINE_RET_FUNC(Count, KC_COUNT, kc_ret_req_t, -1);
+DEFINE_RET_FUNC(Size, KC_SIZE, kc_ret_req_t, -1);
+DEFINE_RET_FUNC(Status, KC_STATUS, kc_strmap_ret_req_t, NULL);
 
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {

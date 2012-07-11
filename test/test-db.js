@@ -1402,6 +1402,38 @@ describe('DB class tests', function () {
           });
         });
       });
+      describe('call `count` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should occured `Error` exception', function (done) {
+            try {
+              cdb.count();
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific `object`', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              cdb.count({ key: 1 });
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific parameter not object', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              cdb.count(1);
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+      });
       describe('when not regist record in db', function () {
         it('should be `0` value', function (done) {
           cdb.count(function (err, ret) {
@@ -1470,6 +1502,38 @@ describe('DB class tests', function () {
           });
         });
       });
+      describe('call `size` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should occured `Error` exception', function (done) {
+            try {
+              cdb.size();
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific `object`', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              cdb.size({ key: 1 });
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific parameter not object', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              cdb.size(1);
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+      });
       describe('when not regist record in db', function () {
         it('should be `success` the getting size value', function (done) {
           cdb.size(function (err, ret) {
@@ -1534,6 +1598,38 @@ describe('DB class tests', function () {
           if (err) { return done(err); }
           fs.unlink(fname, function () {
             done();
+          });
+        });
+      });
+      describe('call `status` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should occured `Error` exception', function (done) {
+            try {
+              cdb.status();
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific `object`', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              cdb.status({ key: 1 });
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific parameter not object', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              cdb.status(1);
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
           });
         });
       });
