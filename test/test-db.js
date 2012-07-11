@@ -1438,6 +1438,75 @@ describe('DB class tests', function () {
     });
 
 
+    // 
+    // size
+    //
+    describe('db not open', function () {
+      it('should be `INVALID` error', function (done) {
+        var cdb = new DB();
+        cdb.size(function (err, ret) {
+          ret.should.eql(-1);
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var cdb;
+      var fname = 'size.kch';
+      before(function (done) {
+        cdb = new DB();
+        cdb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        cdb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function () {
+            done();
+          });
+        });
+      });
+      describe('when not regist record in db', function () {
+        it('should be `success` the getting size value', function (done) {
+          cdb.size(function (err, ret) {
+            if (err) { return done(err); }
+            ret.should.be.above(0);
+            done();
+          });
+        });
+        describe('when add record', function () {
+          it('should be `1` value', function (done) {
+            cdb.add({ key: 'hoge', value: 'hello' }, function (err) {
+              if (err) { return done(err); }
+              cdb.size(function (err, ret) {
+                if (err) { return done(err); }
+                ret.should.be.above(0);
+                done();
+              });
+            });
+          });
+          describe('when remove record', function () {
+            it('should be `0` value', function (done) {
+              cdb.remove({ key: 'hoge' }, function (err) {
+                if (err) { return done(err); }
+                cdb.size(function (err, ret) {
+                  if (err) { return done(err); }
+                  ret.should.be.above(0);
+                  done();
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+
+
+
   });
 });
 

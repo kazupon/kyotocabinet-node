@@ -208,6 +208,13 @@ namespace kc = kyotocabinet;
     req->result = db->error().code();   \
   }                                     \
 
+#define DO_RET_EXECUTE(Method, work_req)                            \
+  kc_ret_req_t *req = static_cast<kc_ret_req_t *>(work_req->data);  \
+  req->ret = db->Method();                                          \
+  if (req->ret == -1) {                                             \
+    req->result = db->error().code();                               \
+  }                                                                 \
+
 #define DO_KV_V_RET_EXECUTE(Method, work_req)                           \
   kc_kv_req_t *req = static_cast<kc_kv_req_t *>(work_req->data);        \
   TRACE("key = %s\n", req->key);                                        \
@@ -271,6 +278,7 @@ enum kc_req_type {
   KC_INCREMENT_DOUBLE,
   KC_CAS,
   KC_COUNT,
+  KC_SIZE,
 };
 
 // common request field
@@ -699,6 +707,7 @@ Handle<Value> PolyDBWrap::Cas(const Arguments &args) {
 }
 
 DEFINE_RET_FUNC(Count, KC_COUNT);
+DEFINE_RET_FUNC(Size, KC_SIZE);
 
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
@@ -802,14 +811,9 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
         break;
       }
     case KC_COUNT:
-      {
-        kc_ret_req_t *ret_req = static_cast<kc_ret_req_t *>(work_req->data);
-        ret_req->ret = db->count();
-        if (ret_req->ret == -1) {
-          ret_req->result = db->error().code();
-        }
-        break;
-      }
+      { DO_RET_EXECUTE(count, work_req); break; }
+    case KC_SIZE:
+      { DO_RET_EXECUTE(size, work_req); break; }
     default:
       assert(0);
   }
@@ -881,6 +885,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         break;
       }
     case KC_COUNT:
+    case KC_SIZE:
       {
         kc_ret_req_t *ret_req = static_cast<kc_ret_req_t*>(work_req->data);
         argv[argc++] = Number::New(ret_req->ret);
@@ -920,6 +925,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_CLOSE:
     case KC_CLEAR:
     case KC_COUNT:
+    case KC_SIZE:
       free(req);
       break;
     case KC_SET:
@@ -987,6 +993,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("increment_double"), FunctionTemplate::New(IncrementDouble)->GetFunction());
   prottpl->Set(String::NewSymbol("cas"), FunctionTemplate::New(Cas)->GetFunction());
   prottpl->Set(String::NewSymbol("count"), FunctionTemplate::New(Count)->GetFunction());
+  prottpl->Set(String::NewSymbol("size"), FunctionTemplate::New(Size)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);
