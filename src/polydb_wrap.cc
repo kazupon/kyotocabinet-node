@@ -233,6 +233,7 @@ enum kc_req_type {
   KC_REPLACE,
   KC_SEIZE,
   KC_INCREMENT,
+  KC_INCREMENT_DOUBLE,
 };
 
 // common request field
@@ -274,6 +275,15 @@ typedef struct kc_increment_req_t {
   int64_t num;
   int64_t orig;
 } kc_increment_req_t;
+
+// increment_double request
+typedef struct kc_increment_double_req_t {
+  KC_REQ_FIELD
+  char *key;
+  double num;
+  double orig;
+} kc_increment_double_req_t;
+
 
 
 PolyDBWrap::PolyDBWrap() {
@@ -488,6 +498,78 @@ Handle<Value> PolyDBWrap::Increment(const Arguments &args) {
   return args.This();
 }
 
+Handle<Value> PolyDBWrap::IncrementDouble(const Arguments &args) {
+  TRACE("IncrementDouble\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> key_sym = String::NewSymbol("key");
+  Local<String> num_sym = String::NewSymbol("num");
+  Local<String> orig_sym = String::NewSymbol("orig");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(num_sym) && !args[0]->ToObject()->Get(num_sym)->IsNumber()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(orig_sym) && !args[0]->ToObject()->Get(orig_sym)->IsNumber()) ||
+       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(num_sym) && !args[0]->ToObject()->Get(num_sym)->IsNumber()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(orig_sym) && !args[0]->ToObject()->Get(orig_sym)->IsNumber()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_increment_double_req_t *inc_dbl_req = (kc_increment_double_req_t *)malloc(sizeof(kc_increment_double_req_t));
+  inc_dbl_req->type = KC_INCREMENT_DOUBLE;
+  inc_dbl_req->result = PolyDB::Error::SUCCESS;
+  inc_dbl_req->wrapdb = obj;
+  inc_dbl_req->key = NULL;
+  inc_dbl_req->num = 0;
+  inc_dbl_req->orig = 0;
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      inc_dbl_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
+      assert(args[0]->IsObject());
+      if (args[0]->ToObject()->Has(key_sym)) {
+        String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
+        inc_dbl_req->key = kc::strdup(*key);
+      }
+      if (args[0]->ToObject()->Has(num_sym)) {
+        inc_dbl_req->num = args[0]->ToObject()->Get(num_sym)->NumberValue();
+      }
+      if (args[0]->ToObject()->Has(orig_sym)) {
+        inc_dbl_req->orig = args[0]->ToObject()->Get(orig_sym)->NumberValue();
+      }
+    }
+  } else {
+    if (args[0]->ToObject()->Has(key_sym)) {
+      String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
+      inc_dbl_req->key = kc::strdup(*key);
+    }
+    if (args[0]->ToObject()->Has(num_sym)) {
+      inc_dbl_req->num = args[0]->ToObject()->Get(num_sym)->NumberValue();
+    }
+    if (args[0]->ToObject()->Has(orig_sym)) {
+      inc_dbl_req->orig = args[0]->ToObject()->Get(orig_sym)->NumberValue();
+    }
+    inc_dbl_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+  
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = inc_dbl_req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return args.This();
+}
+
+
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
 
@@ -556,6 +638,23 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
         }
         break;
       }
+    case KC_INCREMENT_DOUBLE:
+      {
+        kc_increment_double_req_t *inc_dbl_req = static_cast<kc_increment_double_req_t *>(work_req->data);
+        TRACE("increment_double: key = %s, num = %f, orig = %f\n", inc_dbl_req->key, inc_dbl_req->num, inc_dbl_req->orig);
+        if (inc_dbl_req->key == NULL) {
+          inc_dbl_req->result = PolyDB::Error::INVALID;
+        } else {
+          double num = db->increment_double(inc_dbl_req->key, strlen(inc_dbl_req->key), inc_dbl_req->num, inc_dbl_req->orig);
+          TRACE("db->increment_double: num = %f\n", num);
+          if (kc::chknan(num)) {
+            inc_dbl_req->result = db->error().code();
+          } else {
+            inc_dbl_req->num = num;
+          }
+        }
+        break;
+      }
     default:
       assert(0);
   }
@@ -614,6 +713,15 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
           kc_increment_req_t *inc_req = static_cast<kc_increment_req_t *>(work_req->data);
           TRACE("increment->num = %d\n", inc_req->num);
           argv[argc++] = Integer::New(inc_req->num);
+        }
+        break;
+      }
+    case KC_INCREMENT_DOUBLE:
+      {
+        if (req->result == PolyDB::Error::SUCCESS) {
+          kc_increment_double_req_t *inc_dbl_req = static_cast<kc_increment_double_req_t *>(work_req->data);
+          TRACE("increment_double->num = %f\n", inc_dbl_req->num);
+          argv[argc++] = Number::New(inc_dbl_req->num);
         }
         break;
       }
@@ -678,6 +786,16 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         free(inc_req);
         break;
       }
+    case KC_INCREMENT_DOUBLE:
+      {
+        kc_increment_double_req_t *inc_dbl_req = static_cast<kc_increment_double_req_t *>(work_req->data);
+        if (inc_dbl_req->key != NULL) {
+          free(inc_dbl_req->key);
+          inc_dbl_req->key = NULL;
+        }
+        free(inc_dbl_req);
+        break;
+      }
     default:
       assert(0);
   }
@@ -710,6 +828,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("replace"), FunctionTemplate::New(Replace)->GetFunction());
   prottpl->Set(String::NewSymbol("seize"), FunctionTemplate::New(Seize)->GetFunction());
   prottpl->Set(String::NewSymbol("increment"), FunctionTemplate::New(Increment)->GetFunction());
+  prottpl->Set(String::NewSymbol("increment_double"), FunctionTemplate::New(IncrementDouble)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);
