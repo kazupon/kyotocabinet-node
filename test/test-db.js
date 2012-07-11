@@ -1506,6 +1506,82 @@ describe('DB class tests', function () {
     });
 
 
+    // 
+    // status
+    //
+    describe('db not open', function () {
+      it('should be `INVALID` error', function (done) {
+        var cdb = new DB();
+        cdb.status(function (err, ret) {
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var cdb;
+      var fname = 'status.kch';
+      before(function (done) {
+        cdb = new DB();
+        cdb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        cdb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function () {
+            done();
+          });
+        });
+      });
+      describe('when not regist record in db', function () {
+        it('should be `success` the getting status info object', function (done) {
+          cdb.status(function (err, ret) {
+            if (err) { return done(err); }
+            ret.should.be.an.instanceOf(Object);
+            ret.should.have.property('size');
+            ret.should.have.property('path');
+            ret.count.should.eql('0');
+            done();
+          });
+        });
+        describe('when add record', function () {
+          it('should be `success` the getting status info object', function (done) {
+            cdb.add({ key: 'hoge', value: 'hello' }, function (err) {
+              if (err) { return done(err); }
+              cdb.status(function (err, ret) {
+                if (err) { return done(err); }
+                ret.should.be.an.instanceOf(Object);
+                ret.should.have.property('size');
+                ret.should.have.property('path');
+                ret.count.should.eql('1');
+                done();
+              });
+            });
+          });
+          describe('when remove record', function () {
+            it('should be `success` the getting status info object', function (done) {
+              cdb.remove({ key: 'hoge' }, function (err) {
+                if (err) { return done(err); }
+                cdb.status(function (err, ret) {
+                  if (err) { return done(err); }
+                  ret.should.be.an.instanceOf(Object);
+                  ret.should.have.property('size');
+                  ret.should.have.property('path');
+                  ret.count.should.eql('0');
+                  done();
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+
+
 
   });
 });

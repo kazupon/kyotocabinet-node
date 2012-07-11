@@ -279,6 +279,7 @@ enum kc_req_type {
   KC_CAS,
   KC_COUNT,
   KC_SIZE,
+  KC_STATUS,
 };
 
 // common request field
@@ -287,6 +288,8 @@ enum kc_req_type {
   kc_req_type type;             \
   PolyDB::Error::Code result;   \
   Persistent<Function> cb;      \
+
+typedef std::map<std::string, std::string> StringMap;
 
 // base request
 typedef struct kc_req_t {
@@ -342,6 +345,12 @@ typedef struct kc_ret_req_t {
   KC_REQ_FIELD
   int64_t ret;
 } kc_ret_req_t;
+
+// string map value request
+typedef struct kc_strmap_ret_req_t {
+  KC_REQ_FIELD
+  StringMap *ret;
+} kc_strmap_ret_req_t;
 
 
 PolyDBWrap::PolyDBWrap() {
@@ -709,6 +718,33 @@ Handle<Value> PolyDBWrap::Cas(const Arguments &args) {
 DEFINE_RET_FUNC(Count, KC_COUNT);
 DEFINE_RET_FUNC(Size, KC_SIZE);
 
+Handle<Value> PolyDBWrap::Status(const Arguments &args) {
+  TRACE("Status\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  kc_strmap_ret_req_t *strmap_ret_req = (kc_strmap_ret_req_t *)malloc(sizeof(kc_strmap_ret_req_t));
+  strmap_ret_req->type = KC_STATUS;
+  strmap_ret_req->result = PolyDB::Error::SUCCESS;
+  strmap_ret_req->wrapdb = obj;
+  strmap_ret_req->ret = NULL;
+
+  if (args.Length() > 0 && args[0]->IsFunction()) {
+    strmap_ret_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+  }
+
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = strmap_ret_req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return args.This();
+}
+
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -814,6 +850,15 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       { DO_RET_EXECUTE(count, work_req); break; }
     case KC_SIZE:
       { DO_RET_EXECUTE(size, work_req); break; }
+    case KC_STATUS:
+      {
+        kc_strmap_ret_req_t *strmap_ret_req = static_cast<kc_strmap_ret_req_t*>(work_req->data);
+        strmap_ret_req->ret = new StringMap();
+        if (!db->status(strmap_ret_req->ret)) {
+          strmap_ret_req->result = db->error().code();
+        }
+        break;
+      }
     default:
       assert(0);
   }
@@ -891,6 +936,23 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         argv[argc++] = Number::New(ret_req->ret);
         break;
       }
+    case KC_STATUS:
+      {
+        if (req->result == PolyDB::Error::SUCCESS) {
+          kc_strmap_ret_req_t *strmap_ret_req = static_cast<kc_strmap_ret_req_t*>(work_req->data);
+          Local<Object> ret = Object::New();
+          StringMap::const_iterator it = strmap_ret_req->ret->begin();
+          StringMap::const_iterator it_end = strmap_ret_req->ret->end();
+          while (it != it_end) {
+            Local<String> key = String::New(it->first.c_str(), it->first.length());
+            Local<String> val = String::New(it->second.c_str(), it->second.length());
+            ret->Set(key, val);
+            ++it;
+          }
+          argv[argc++] = ret;
+        }
+        break;
+      }
     default:
       break;
   }
@@ -928,6 +990,16 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_SIZE:
       free(req);
       break;
+    case KC_STATUS:
+      {
+        kc_strmap_ret_req_t *strmap_ret_req = static_cast<kc_strmap_ret_req_t*>(work_req->data);
+        if (strmap_ret_req->ret) {
+          delete strmap_ret_req->ret;
+          strmap_ret_req->ret = NULL;
+        }
+        free(req);
+        break;
+      }
     case KC_SET:
     case KC_GET:
     case KC_ADD:
@@ -994,6 +1066,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("cas"), FunctionTemplate::New(Cas)->GetFunction());
   prottpl->Set(String::NewSymbol("count"), FunctionTemplate::New(Count)->GetFunction());
   prottpl->Set(String::NewSymbol("size"), FunctionTemplate::New(Size)->GetFunction());
+  prottpl->Set(String::NewSymbol("status"), FunctionTemplate::New(Status)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);
