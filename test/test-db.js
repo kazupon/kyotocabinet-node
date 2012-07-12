@@ -110,13 +110,45 @@ describe('DB class tests', function () {
     // 
     // close
     //
-    describe('when call `close` method', function () {
-      it('will catch `err` callback into `INVALID` value at `code` property', function (done) {
-        db.close(function (err) {
-          err.should.be.a('object');
-          err.should.have.property('code');
-          err.code.should.eql(Error.INVALID);
-          done();
+    describe('db not open', function () {
+      describe('when call `close` method', function () {
+        it('should be `INVALID` error', function (done) {
+          db.close(function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+      describe('call `close` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should be `Success`', function (done) {
+            db.open(function (err) {
+              if (err) { return done(err); }
+              db.close();
+              done();
+            });
+          });
+        });
+        describe('with specific `object`', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              db.close({ key: 1 });
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific parameter not object', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              db.close(1);
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
         });
       });
     });
@@ -350,29 +382,56 @@ describe('DB class tests', function () {
     // 
     // clear
     //
-    describe('when call `clear` method', function () {
-      it('will catch `success` callback', function (done) {
-        db1.clear(function (err) {
-          if (err) { done(err); }
-          done();
-        });
-      });
-      describe('when call `get` method', function () {
-        it('should catch `err` callback into `NOREC` value at `code` property', function (done) {
-          db1.get({ key: 'norecord' }, function (err) {
-            err.should.be.a('object');
-            err.should.have.property('code');
-            err.code.should.eql(Error.NOREC);
-            done();
-          });
-        });
-      });
-      describe('with db not open', function () {
-        it('should catch `err` callback into `INVALID` value at `code` property', function (done) {
+    describe('db not open', function () {
+      describe('when call `clear` method', function () {
+        it('should be `INVALID` error', function (done) {
           db.clear(function (err) {
             err.should.have.property('code');
             err.code.should.eql(Error.INVALID);
             done();
+          });
+        });
+      });
+    });
+    describe('db open', function () {
+      describe('when call `clear` method', function () {
+        it('should be clear ', function (done) {
+          db1.clear(function (err) {
+            if (err) { return done(err); }
+            db1.get({ key: 'norecord' }, function (err) {
+              err.should.be.a('object');
+              err.should.have.property('code');
+              err.code.should.eql(Error.NOREC);
+              done();
+            });
+          });
+        });
+      });
+      describe('call `clear` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should be `Success`', function (done) {
+            db1.clear();
+            done();
+          });
+        });
+        describe('with specific `object`', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              db1.clear({ key: 1 });
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific parameter not object', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              db1.clear(1);
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
           });
         });
       });

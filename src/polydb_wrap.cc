@@ -21,10 +21,17 @@ namespace kc = kyotocabinet;
     PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());          \
     assert(obj != NULL);                                                    \
                                                                             \
+    if ((args.Length() == 1 && (!args[0]->IsObject())                       \
+                              | !args[0]->IsFunction())) {                  \
+      ThrowException(Exception::TypeError(String::New("Bad argument")));    \
+      return args.This();                                                   \
+    }                                                                       \
+                                                                            \
     kc_req_t *req = (kc_req_t *)malloc(sizeof(kc_req_t));                   \
     req->type = Type;                                                       \
     req->result = PolyDB::Error::SUCCESS;                                   \
     req->wrapdb = obj;                                                      \
+    req->cb.Clear();                                                        \
                                                                             \
     if (args.Length() > 0 && args[0]->IsFunction()) {                       \
       req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0])); \
@@ -942,6 +949,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
   if (!req->cb.IsEmpty()) {
     TryCatch try_catch;
     //req->cb->Call(Context::GetCurrent()->Global(), 1, argv);
+    TRACE("calling callback %d %p \n", req->type, work_req);
     MakeCallback(wrapdb->handle_, req->cb, argc, argv);
     if (try_catch.HasCaught()) {
       FatalException(try_catch);
@@ -953,6 +961,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
 
   wrapdb->Unref();
   req->cb.Dispose();
+  TRACE("dispose\n");
   req->wrapdb = NULL;
 
   switch (req->type) {
