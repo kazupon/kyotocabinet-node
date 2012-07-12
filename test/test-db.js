@@ -1463,13 +1463,9 @@ describe('DB class tests', function () {
       });
       describe('call `count` method parameter check', function () {
         describe('with no specific parameter', function () {
-          it('should occured `Error` exception', function (done) {
-            try {
-              cdb.count();
-            } catch (e) {
-              e.should.be.an.instanceOf(TypeError);
-              done();
-            }
+          it('should be `success`', function (done) {
+            cdb.count();
+            done();
           });
         });
         describe('with specific `object`', function () {
@@ -1563,13 +1559,9 @@ describe('DB class tests', function () {
       });
       describe('call `size` method parameter check', function () {
         describe('with no specific parameter', function () {
-          it('should occured `Error` exception', function (done) {
-            try {
-              cdb.size();
-            } catch (e) {
-              e.should.be.an.instanceOf(TypeError);
-              done();
-            }
+          it('should be `success` exception', function (done) {
+            cdb.size();
+            done();
           });
         });
         describe('with specific `object`', function () {
@@ -1662,13 +1654,9 @@ describe('DB class tests', function () {
       });
       describe('call `status` method parameter check', function () {
         describe('with no specific parameter', function () {
-          it('should occured `Error` exception', function (done) {
-            try {
-              cdb.status();
-            } catch (e) {
-              e.should.be.an.instanceOf(TypeError);
-              done();
-            }
+          it('should be `success`', function (done) {
+            cdb.status();
+            done();
           });
         });
         describe('with specific `object`', function () {
