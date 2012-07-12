@@ -1925,10 +1925,12 @@ describe('DB class tests', function () {
           });
         });
         describe('add `10` records', function () {
-          it('should be get `10` records', function (done) {
+          var keys = null;
+
+          before(function (done) {
             var cnt = 0;
             var max = 10;
-            var keys = [];
+            keys = [];
             (function fn (cnt, keys, cb) {
               cnt++;
               var key = 'key' + cnt.toString();
@@ -1940,10 +1942,37 @@ describe('DB class tests', function () {
               });
             })(cnt, keys, function (err, keys) {
               if (err) { return done(err); }
+              done();
+            });
+          });
+
+          describe('with specific all registered keys', function () {
+            it('should be get `10` records', function (done) {
               mdb.get_bulk({ keys: keys, atomic: true }, function (err, recs) {
                 if (err) { return done(err); }
                 recs.should.have.keys(keys);
-                for (var i = 0; i < max; i++) {
+                for (var i = 0; i < 10; i++) {
+                  recs['key' + (i + 1)].should.eql('key' + (i + 1));
+                }
+                done();
+              });
+            });
+          });
+          describe('with specific half registered keys & half not registered keys', function () {
+            it('should be get `5` records', function (done) {
+              keys = [];
+              for (var i = 0; i < 5; i++) {
+                keys.push('key' + (i + 1));
+              }
+              keys.push('hoge');
+              keys.push('foo');
+              keys.push('bar');
+              keys.push('buz');
+              keys.push('moge');
+              mdb.get_bulk({ keys: keys }, function (err, recs) {
+                if (err) { return done(err); }
+                Object.keys(recs).should.have.length(5);
+                for (var i = 0; i < 5; i++) {
                   recs['key' + (i + 1)].should.eql('key' + (i + 1));
                 }
                 done();
@@ -2155,21 +2184,49 @@ describe('DB class tests', function () {
             done();
           });
         });
-        describe('remove `10` records', function () {
-          it('should be remove `10` records', function (done) {
-            var recs = {};
-            var max = 10;
-            for (var i = 0; i < max; i++) {
+        describe('add `10` records', function () {
+          var recs;
+          beforeEach(function (done) {
+            recs = {};
+            for (var i = 0; i < 10; i++) {
               recs['key' + (i + 1)] = 'key' + (i + 1);
             }
             mdb.set_bulk({ recs: recs }, function (err, num) {
               if (err) { return done(err); }
+              done();
+            });
+          });
+
+          describe('with specific all registered keys', function () {
+            it('should be remove `10` records', function (done) {
               mdb.remove_bulk({ keys: Object.keys(recs) }, function (err, num) {
                 if (err) { return done(err); }
                 num.should.eql(10);
                 mdb.count(function (err, cnt) {
                   if (err) { return done(err); }
                   cnt.should.eql(0);
+                  done();
+                });
+              });
+            });
+          });
+          describe('with specific half registered keys & half not registered keys', function () {
+            it('should be remove `10` records', function (done) {
+              var keys = [];
+              for (var i = 0; i < 5; i++) {
+                keys.push('key' + (i + 1));
+              }
+              keys.push('hoge');
+              keys.push('foo');
+              keys.push('bar');
+              keys.push('buz');
+              keys.push('moge');
+              mdb.remove_bulk({ keys: keys }, function (err, num) {
+                if (err) { return done(err); }
+                num.should.eql(5);
+                mdb.count(function (err, cnt) {
+                  if (err) { return done(err); }
+                  cnt.should.eql(5);
                   done();
                 });
               });
