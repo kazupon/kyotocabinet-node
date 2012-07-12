@@ -411,6 +411,7 @@ Handle<Value> PolyDBWrap::Open(const Arguments &args) {
   open_req->type = KC_OPEN;
   open_req->result = PolyDB::Error::SUCCESS;
   open_req->wrapdb = obj;
+  open_req->cb.Clear();
 
   if (args.Length() == 0) {
     String::Utf8Value str(String::NewSymbol(":")->ToString());
@@ -473,6 +474,7 @@ Handle<Value> PolyDBWrap::Remove(const Arguments &args) {
   remove_req->type = KC_REMOVE;
   remove_req->result = PolyDB::Error::SUCCESS;
   remove_req->wrapdb = obj;
+  remove_req->cb.Clear();
   remove_req->key = NULL;
 
   if (args.Length() == 1) {
@@ -533,6 +535,7 @@ Handle<Value> PolyDBWrap::Increment(const Arguments &args) {
   increment_req->type = KC_INCREMENT;
   increment_req->result = PolyDB::Error::SUCCESS;
   increment_req->wrapdb = obj;
+  increment_req->cb.Clear();
   increment_req->key = NULL;
   increment_req->num = 0;
   increment_req->orig = 0;
@@ -616,6 +619,7 @@ Handle<Value> PolyDBWrap::IncrementDouble(const Arguments &args) {
   inc_dbl_req->type = KC_INCREMENT_DOUBLE;
   inc_dbl_req->result = PolyDB::Error::SUCCESS;
   inc_dbl_req->wrapdb = obj;
+  inc_dbl_req->cb.Clear();
   inc_dbl_req->key = NULL;
   inc_dbl_req->num = 0;
   inc_dbl_req->orig = 0;
@@ -687,6 +691,7 @@ Handle<Value> PolyDBWrap::Cas(const Arguments &args) {
   cas_req->type = KC_CAS;
   cas_req->result = PolyDB::Error::SUCCESS;
   cas_req->wrapdb = obj;
+  cas_req->cb.Clear();
   cas_req->key = NULL;
   cas_req->oval = NULL;
   cas_req->nval = NULL;
