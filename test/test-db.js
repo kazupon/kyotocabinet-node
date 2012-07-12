@@ -2065,6 +2065,120 @@ describe('DB class tests', function () {
     });
 
 
+    // 
+    // remove_bulk
+    //
+    describe('db not open', function () {
+      it('should be `INVALID` error', function (done) {
+        var mdb = new DB();
+        mdb.remove_bulk({ keys: [ 'key1', 'key2' ] }, function (err, num) {
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var mdb;
+      var fname = 'remove_bulk.kct';
+      before(function (done) {
+        mdb = new DB();
+        mdb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        mdb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function () {
+            done();
+          });
+        });
+      });
+      describe('call `remove_bulk` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.remove_bulk();
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with no specific `keys`', function () {
+          it('should be `INVALID` error', function (done) {
+            mdb.remove_bulk({}, function (err) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.INVALID);
+              done();
+            });
+          });
+        });
+        describe('with specific `keys` type not array', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.remove_bulk({ keys: 1 });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific `atomic` type not boolean', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.remove_bulk({ keys: [ 'key1' ], atomic: 'hello' });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific parameter not object', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.remove_bulk(1);
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+      });
+      describe('not regist record in db', function () {
+        it('should be `NOREC` error', function (done) {
+          mdb.remove_bulk({ keys: [ 'key1' ], atomic: false }, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+        describe('remove `10` records', function () {
+          it('should be remove `10` records', function (done) {
+            var recs = {};
+            var max = 10;
+            for (var i = 0; i < max; i++) {
+              recs['key' + (i + 1)] = 'key' + (i + 1);
+            }
+            mdb.set_bulk({ recs: recs }, function (err, num) {
+              if (err) { return done(err); }
+              mdb.remove_bulk({ keys: Object.keys(recs) }, function (err, num) {
+                if (err) { return done(err); }
+                num.should.eql(10);
+                mdb.count(function (err, cnt) {
+                  if (err) { return done(err); }
+                  cnt.should.eql(0);
+                  done();
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+
 
 
   });

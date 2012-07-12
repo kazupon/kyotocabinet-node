@@ -42,6 +42,7 @@ class PolyDBWrap : public ObjectWrap {
     static Handle<Value> Check(const Arguments &args);
     static Handle<Value> GetBulk(const Arguments &args);
     static Handle<Value> SetBulk(const Arguments &args);
+    static Handle<Value> RemoveBulk(const Arguments &args);
 
     static Persistent<FunctionTemplate> ctor;
     static Persistent<String> code_symbol;
