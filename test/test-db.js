@@ -2748,6 +2748,114 @@ describe('DB class tests', function () {
     });
 
 
+    // 
+    // copy
+    //
+    describe('db not open', function () {
+      it('should be `INVALID` error', function (done) {
+        var mdb = new DB();
+        mdb.copy('copy.kct', function (err) {
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var mdb;
+      var fname = 'copy.kct';
+      before(function (done) {
+        mdb = new DB();
+        mdb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        mdb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function () {
+            done();
+          });
+        });
+      });
+      describe('call `copy` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.copy();
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific type not string', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.copy(123);
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+      });
+      describe('not regist record in db', function () {
+        var dest = 'copy_dest.kct';
+        afterEach(function (done) {
+          fs.unlink(dest, function () {
+            done();
+          });
+        });
+        it('should be `success`', function (done) {
+          mdb.copy(dest, function (err) {
+            if (err) { return done(err); }
+            var ddb = new DB();
+            ddb.open({ path: dest, mode: DB.OREADER }, function (err) {
+              if (err) { return done(err); }
+              ddb.count(function (err, cnt) {
+                if (err) { return done(err); }
+                cnt.should.eql(0);
+                ddb.close(function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+            });
+          });
+        });
+        describe('add record', function () {
+          before(function (done) {
+            mdb.set({ key: 'hoge', value: 'hello' }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+          it('should be get record from copy db', function (done) {
+            mdb.copy(dest, function (err) {
+              if (err) { return done(err); }
+              var ddb = new DB();
+              ddb.open({ path: dest, mode: DB.OREADER }, function (err) {
+                if (err) { return done(err); }
+                ddb.get({ key: 'hoge' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  ddb.count(function (err, cnt) {
+                    if (err) { return done(err); }
+                    cnt.should.eql(1);
+                    ddb.close(function (err) {
+                      if (err) { return done(err); }
+                      done();
+                    });
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+    });
 
 
   });

@@ -303,6 +303,7 @@ enum kc_req_type {
   KC_MATCH_PREFIX,
   KC_MATCH_REGEX,
   KC_MATCH_SIMILAR,
+  KC_COPY,
 };
 
 // common request field
@@ -432,6 +433,12 @@ typedef struct kc_match_similar_req {
   bool utf;
   StringVector *keys;
 } kc_match_similar_req;
+
+// copy request
+typedef struct kc_copy_req {
+  KC_REQ_FIELD
+  char *path;
+} kc_copy_req;
 
 
 StringVector* Array2Vector(const Local<Value> obj) {
@@ -1298,6 +1305,50 @@ Handle<Value> PolyDBWrap::MatchSimilar(const Arguments &args) {
   return args.This();
 }
 
+Handle<Value> PolyDBWrap::Copy(const Arguments &args) {
+  TRACE("Copy\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> key_sym = String::NewSymbol("path");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsString()) | !args[0]->IsFunction()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_copy_req *req = (kc_copy_req *)malloc(sizeof(kc_copy_req));
+  req->type = KC_COPY;
+  req->result = PolyDB::Error::SUCCESS;
+  req->wrapdb = obj;
+  req->cb.Clear();
+  req->path = NULL;
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsString()) {
+      String::Utf8Value path(args[0]->ToString());
+      req->path = kc::strdup(*path);
+    }
+  } else {
+    String::Utf8Value path(args[0]->ToString());
+    req->path = kc::strdup(*path);
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+  
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return args.This();
+}
+
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -1513,6 +1564,19 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
             ms_req->result = db->error().code();
           }
           TRACE("match_similar: ret = %ld\n", num);
+        }
+        break;
+      }
+    case KC_COPY:
+      {
+        kc_copy_req *copy_req = static_cast<kc_copy_req*>(work_req->data);
+        TRACE("copy: path = %s\n", copy_req->path);
+        if (copy_req->path == NULL) {
+          req->result = PolyDB::Error::INVALID;
+        } else {
+          if (!db->copy(copy_req->path)) {
+            req->result = db->error().code();
+          }
         }
         break;
       }
@@ -1808,6 +1872,16 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         free(req);
         break;
       }
+    case KC_COPY:
+      {
+        kc_copy_req *copy_req = static_cast<kc_copy_req*>(work_req->data);
+        if (copy_req->path) {
+          free(copy_req->path);
+          copy_req->path = NULL;
+        }
+        free(req);
+        break;
+      }
     default:
       assert(0);
   }
@@ -1851,6 +1925,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("match_prefix"), FunctionTemplate::New(MatchPrefix)->GetFunction());
   prottpl->Set(String::NewSymbol("match_regex"), FunctionTemplate::New(MatchRegex)->GetFunction());
   prottpl->Set(String::NewSymbol("match_similar"), FunctionTemplate::New(MatchSimilar)->GetFunction());
+  prottpl->Set(String::NewSymbol("copy"), FunctionTemplate::New(Copy)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);
