@@ -300,6 +300,7 @@ enum kc_req_type {
   KC_GET_BULK,
   KC_SET_BULK,
   KC_REMOVE_BULK,
+  KC_MATCH_PREFIX,
 };
 
 // common request field
@@ -403,6 +404,14 @@ typedef struct kc_remove_bulk_req {
   bool atomic;
   int64_t num;
 } kc_remove_bulk_req;
+
+// match_prefix request
+typedef struct kc_match_prefix_req {
+  KC_REQ_FIELD
+  char *prefix;
+  int64_t max;
+  StringVector *keys;
+} kc_match_prefix_req;
 
 
 StringVector* Array2Vector(const Local<Value> obj) {
@@ -1050,6 +1059,68 @@ Handle<Value> PolyDBWrap::RemoveBulk(const Arguments &args) {
   return args.This();
 }
 
+Handle<Value> PolyDBWrap::MatchPrefix(const Arguments &args) {
+  TRACE("MatchPrefix\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> prefix_sym = String::NewSymbol("prefix");
+  Local<String> max_sym = String::NewSymbol("max");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(prefix_sym) && !args[0]->ToObject()->Get(prefix_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && !args[0]->ToObject()->Get(max_sym)->IsNumber()) ||
+       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(prefix_sym) && !args[0]->ToObject()->Get(prefix_sym)->IsString()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && !args[0]->ToObject()->Get(max_sym)->IsNumber()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_match_prefix_req *req = (kc_match_prefix_req *)malloc(sizeof(kc_match_prefix_req));
+  req->type = KC_MATCH_PREFIX;
+  req->result = PolyDB::Error::SUCCESS;
+  req->wrapdb = obj;
+  req->cb.Clear();
+  req->prefix = NULL;
+  req->max = -1;
+  req->keys = NULL;
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
+      if (args[0]->ToObject()->Has(prefix_sym)) {
+        String::Utf8Value prefix(args[0]->ToObject()->Get(prefix_sym));
+        req->prefix = kc::strdup(*prefix);
+      }
+      if (args[0]->ToObject()->Has(max_sym)) {
+        req->max = args[0]->ToObject()->Get(max_sym)->NumberValue();
+      }
+    }
+  } else {
+    if (args[0]->ToObject()->Has(prefix_sym)) {
+      String::Utf8Value prefix(args[0]->ToObject()->Get(prefix_sym));
+      req->prefix = kc::strdup(*prefix);
+    }
+    if (args[0]->ToObject()->Has(max_sym)) {
+      req->max = args[0]->ToObject()->Get(max_sym)->NumberValue();
+    }
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+  
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return args.This();
+}
+
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -1222,6 +1293,21 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
         }
         break;
       }
+    case KC_MATCH_PREFIX:
+      {
+        kc_match_prefix_req *mp_req = static_cast<kc_match_prefix_req*>(work_req->data);
+        if (mp_req->prefix == NULL) {
+          mp_req->result = PolyDB::Error::INVALID;
+        } else {
+          mp_req->keys = new StringVector();
+          int64_t num = db->match_prefix(std::string(mp_req->prefix, strlen(mp_req->prefix)), mp_req->keys, mp_req->max);
+          if (num <= 0) {
+            mp_req->result = db->error().code();
+          }
+          TRACE("match_prefix: ret = %ld\n", num);
+        }
+        break;
+      }
     default:
       assert(0);
   }
@@ -1331,6 +1417,23 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       {
         kc_remove_bulk_req *rb_req = static_cast<kc_remove_bulk_req*>(work_req->data);
         argv[argc++] = Number::New(rb_req->num);
+        break;
+      }
+    case KC_MATCH_PREFIX:
+      {
+        if (req->result == PolyDB::Error::SUCCESS) {
+          kc_match_prefix_req *mp_req = static_cast<kc_match_prefix_req*>(work_req->data);
+          StringVector::const_iterator it = mp_req->keys->begin();
+          StringVector::const_iterator it_end = mp_req->keys->end();
+          int32_t index = 0;
+          Local<Array> keys = Array::New(mp_req->keys->size());
+          while (it != it_end) {
+            Local<String> val = String::New(it->c_str(), it->length());
+            keys->Set(index++, val);
+            ++it;
+          }
+          argv[argc++] = keys;
+        }
         break;
       }
     default:
@@ -1448,6 +1551,20 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         free(req);
         break;
       }
+    case KC_MATCH_PREFIX:
+      {
+        kc_match_prefix_req *mp_req = static_cast<kc_match_prefix_req*>(work_req->data);
+        if (mp_req->prefix) {
+          free(mp_req->prefix);
+          mp_req->keys = NULL;
+        }
+        if (mp_req->keys) {
+          delete mp_req->keys;
+          mp_req->keys = NULL;
+        }
+        free(req);
+        break;
+      }
     default:
       assert(0);
   }
@@ -1488,6 +1605,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("get_bulk"), FunctionTemplate::New(GetBulk)->GetFunction());
   prottpl->Set(String::NewSymbol("set_bulk"), FunctionTemplate::New(SetBulk)->GetFunction());
   prottpl->Set(String::NewSymbol("remove_bulk"), FunctionTemplate::New(RemoveBulk)->GetFunction());
+  prottpl->Set(String::NewSymbol("match_prefix"), FunctionTemplate::New(MatchPrefix)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);
