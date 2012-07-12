@@ -2402,7 +2402,7 @@ describe('DB class tests', function () {
     describe('db not open', function () {
       it('should be `INVALID` error', function (done) {
         var mdb = new DB();
-        mdb.match_regex({ regex: '/hoge/', max: 10 }, function (err, keys) {
+        mdb.match_regex({ regex: /hoge/, max: 10 }, function (err, keys) {
           err.should.have.property('code');
           err.code.should.eql(Error.INVALID);
           done();
@@ -2480,7 +2480,7 @@ describe('DB class tests', function () {
       });
       describe('not regist record in db', function () {
         it('should be `NOREC` error', function (done) {
-          mdb.match_regex({ regex: 'key' }, function (err, keys) {
+          mdb.match_regex({ regex: /key/ }, function (err, keys) {
             err.should.have.property('code');
             err.code.should.eql(Error.NOREC);
             done();
@@ -2507,7 +2507,7 @@ describe('DB class tests', function () {
 
           describe('with specific regex-> `ey` max -> `5`', function () {
             it('should be get `5` keys', function (done) {
-              mdb.match_regex({ regex: 'ey', max: 5 }, function (err, keys) {
+              mdb.match_regex({ regex: /ey/, max: 5 }, function (err, keys) {
                 if (err) { return done(err); }
                 console.log(keys);
                 Object.keys(keys).should.have.length(5);
@@ -2522,7 +2522,7 @@ describe('DB class tests', function () {
           });
           describe('with specific regex -> `ey|oo` max -> `2`', function () {
             it('should be get `2` keys', function (done) {
-              mdb.match_regex({ regex: 'ey|oo', max: 2 }, function (err, keys) {
+              mdb.match_regex({ regex: /ey|oo/, max: 2 }, function (err, keys) {
                 if (err) { return done(err); }
                 console.log(keys);
                 Object.keys(keys).should.have.length(2);
@@ -2532,7 +2532,7 @@ describe('DB class tests', function () {
           });
           describe('with specific regex -> `^b.*` max -> `-1`', function () {
             it('should be get `2` keys', function (done) {
-              mdb.match_regex({ regex: '^b.*', max: -1 }, function (err, keys) {
+              mdb.match_regex({ regex: /^b.*/, max: -1 }, function (err, keys) {
                 if (err) { return done(err); }
                 console.log(keys);
                 Object.keys(keys).should.have.length(2);
@@ -2544,7 +2544,7 @@ describe('DB class tests', function () {
           });
           describe('with specific regex -> `key` (max ommit)', function () {
             it('should be get `5` keys', function (done) {
-              mdb.match_regex({ regex: 'key' }, function (err, keys) {
+              mdb.match_regex({ regex: /key/ }, function (err, keys) {
                 if (err) { return done(err); }
                 console.log(keys);
                 Object.keys(keys).should.have.length(5);

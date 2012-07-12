@@ -1165,10 +1165,10 @@ Handle<Value> PolyDBWrap::MatchRegex(const Arguments &args) {
   Local<String> max_sym = String::NewSymbol("max");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(regex_sym) && !args[0]->ToObject()->Get(regex_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(regex_sym) && !args[0]->ToObject()->Get(regex_sym)->IsRegExp()) ||
        (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && !args[0]->ToObject()->Get(max_sym)->IsNumber()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(regex_sym) && !args[0]->ToObject()->Get(regex_sym)->IsString()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(regex_sym) && !args[0]->ToObject()->Get(regex_sym)->IsRegExp()) || 
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && !args[0]->ToObject()->Get(max_sym)->IsNumber()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return args.This();
@@ -1188,7 +1188,7 @@ Handle<Value> PolyDBWrap::MatchRegex(const Arguments &args) {
       req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
     } else if (args[0]->IsObject()) {
       if (args[0]->ToObject()->Has(regex_sym)) {
-        String::Utf8Value regex(args[0]->ToObject()->Get(regex_sym));
+        String::Utf8Value regex(Local<RegExp>::Cast(args[0]->ToObject()->Get(regex_sym))->GetSource());
         req->regex = kc::strdup(*regex);
       }
       if (args[0]->ToObject()->Has(max_sym)) {
@@ -1197,7 +1197,7 @@ Handle<Value> PolyDBWrap::MatchRegex(const Arguments &args) {
     }
   } else {
     if (args[0]->ToObject()->Has(regex_sym)) {
-      String::Utf8Value regex(args[0]->ToObject()->Get(regex_sym));
+      String::Utf8Value regex(Local<RegExp>::Cast(args[0]->ToObject()->Get(regex_sym))->GetSource());
       req->regex = kc::strdup(*regex);
     }
     if (args[0]->ToObject()->Has(max_sym)) {
@@ -1492,11 +1492,12 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
           mr_req->result = PolyDB::Error::INVALID;
         } else {
           mr_req->keys = new StringVector();
+          TRACE("match_regex: regex = %s, max = %ld\n", mr_req->regex, mr_req->max);
           int64_t num = db->match_regex(std::string(mr_req->regex, strlen(mr_req->regex)), mr_req->keys, mr_req->max);
+          TRACE("match_regex: ret = %ld\n", num);
           if (num <= 0) {
             mr_req->result = db->error().code();
           }
-          TRACE("match_regex: ret = %ld\n", num);
         }
         break;
       }
