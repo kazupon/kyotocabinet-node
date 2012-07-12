@@ -44,6 +44,7 @@ class PolyDBWrap : public ObjectWrap {
     static Handle<Value> SetBulk(const Arguments &args);
     static Handle<Value> RemoveBulk(const Arguments &args);
     static Handle<Value> MatchPrefix(const Arguments &args);
+    static Handle<Value> MatchRegex(const Arguments &args);
 
     static Persistent<FunctionTemplate> ctor;
     static Persistent<String> code_symbol;

@@ -2396,6 +2396,172 @@ describe('DB class tests', function () {
     });
 
 
+    // 
+    // match_regex
+    //
+    describe('db not open', function () {
+      it('should be `INVALID` error', function (done) {
+        var mdb = new DB();
+        mdb.match_regex({ regex: '/hoge/', max: 10 }, function (err, keys) {
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var mdb;
+      var fname = 'match_regex.kct';
+      before(function (done) {
+        mdb = new DB();
+        mdb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        mdb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function () {
+            done();
+          });
+        });
+      });
+      describe('call `match_regex` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.match_regex();
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with no specific `prefix`', function () {
+          it('should be `INVALID` error', function (done) {
+            mdb.match_regex({}, function (err) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.INVALID);
+              done();
+            });
+          });
+        });
+        describe('with specific `regex` type not string', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.match_regex({ regex: 1 });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific `max` type not number', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.match_regex({ regex: 'key', max: 'hello' });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific parameter not object', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.match_regex(1);
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+      });
+      describe('not regist record in db', function () {
+        it('should be `NOREC` error', function (done) {
+          mdb.match_regex({ regex: 'key' }, function (err, keys) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+        describe('add `10` records', function () {
+          before(function (done) {
+            var recs = {};
+            recs._key1 = 'key1';
+            recs._key2 = 'key2';
+            recs.key_3 = 'key3';
+            recs.key4 = 'key4';
+            recs._key5 = 'key5';
+            recs.hoge = 'hoge';
+            recs.foo = 'foo';
+            recs.bar = 'bar';
+            recs.buz = 'buz';
+            recs.tako = 'tako';
+            mdb.set_bulk({ recs: recs }, function (err, num) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+
+          describe('with specific regex-> `ey` max -> `5`', function () {
+            it('should be get `5` keys', function (done) {
+              mdb.match_regex({ regex: 'ey', max: 5 }, function (err, keys) {
+                if (err) { return done(err); }
+                console.log(keys);
+                Object.keys(keys).should.have.length(5);
+                keys.should.include('_key1');
+                keys.should.include('_key2');
+                keys.should.include('key_3');
+                keys.should.include('key4');
+                keys.should.include('_key5');
+                done();
+              });
+            });
+          });
+          describe('with specific prefix -> `ey|oo` max -> `2`', function () {
+            it('should be get `2` keys', function (done) {
+              mdb.match_regex({ regex: 'ey|oo', max: 2 }, function (err, keys) {
+                if (err) { return done(err); }
+                console.log(keys);
+                Object.keys(keys).should.have.length(2);
+                done();
+              });
+            });
+          });
+          describe('with specific prefix -> `^b.*` max -> `-1`', function () {
+            it('should be get `2` keys', function (done) {
+              mdb.match_regex({ regex: '^b.*', max: -1 }, function (err, keys) {
+                if (err) { return done(err); }
+                console.log(keys);
+                Object.keys(keys).should.have.length(2);
+                keys.should.include('bar');
+                keys.should.include('buz');
+                done();
+              });
+            });
+          });
+          describe('with specific prefix -> `key` (max ommit)', function () {
+            it('should be get `5` keys', function (done) {
+              mdb.match_regex({ regex: 'key' }, function (err, keys) {
+                if (err) { return done(err); }
+                console.log(keys);
+                Object.keys(keys).should.have.length(5);
+                keys.should.include('_key1');
+                keys.should.include('_key2');
+                keys.should.include('key_3');
+                keys.should.include('key4');
+                keys.should.include('_key5');
+                done();
+              });
+            });
+          });
+        });
+      });
+    });
+
+
 
   });
 });
