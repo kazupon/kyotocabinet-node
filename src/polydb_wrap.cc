@@ -298,6 +298,7 @@ enum kc_req_type {
   KC_STATUS,
   KC_CHECK,
   KC_GET_BULK,
+  KC_SET_BULK,
 };
 
 // common request field
@@ -386,6 +387,14 @@ typedef struct kc_get_bulk_req {
   StringMap *recs;
 } kc_get_bulk_req;
 
+// set_bulk request
+typedef struct kc_set_bulk_req {
+  KC_REQ_FIELD
+  StringMap *recs;
+  bool atomic;
+  int64_t num;
+} kc_set_bulk_req;
+
 
 StringVector* Array2Vector(const Local<Value> obj) {
   StringVector *vector = new StringVector();
@@ -409,6 +418,22 @@ Local<Object> Map2Obj(const StringMap *map) {
     ++it;
   }
   return obj;
+}
+
+StringMap* Obj2Map(const Local<Value> target) {
+  StringMap *result = new StringMap();
+  Local<Object> obj = Local<Object>::Cast(target);
+  Local<Array> names = obj->GetPropertyNames();
+  int len = names->Length();
+  for (int i = 0; i < len; i++) {
+    Local<Value> name = names->Get(Integer::New(i));
+    String::Utf8Value key(name);
+    String::Utf8Value val(obj->Get(name)->ToString());
+    std::string std_key = std::string(*key, key.length());
+    std::string std_val = std::string(*val, val.length());
+    result->insert(std::pair<std::string, std::string>(std_key, std_val));
+  }
+  return result;
 }
 
 
@@ -896,6 +921,66 @@ Handle<Value> PolyDBWrap::GetBulk(const Arguments &args) {
   return args.This();
 }
 
+Handle<Value> PolyDBWrap::SetBulk(const Arguments &args) {
+  TRACE("SetBulk\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> recs_sym = String::NewSymbol("recs");
+  Local<String> atomic_sym = String::NewSymbol("atomic");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(recs_sym) && !args[0]->ToObject()->Get(recs_sym)->IsObject()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ||
+       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(recs_sym) && !args[0]->ToObject()->Get(recs_sym)->IsObject()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_set_bulk_req *req = (kc_set_bulk_req *)malloc(sizeof(kc_set_bulk_req));
+  req->type = KC_SET_BULK;
+  req->result = PolyDB::Error::SUCCESS;
+  req->wrapdb = obj;
+  req->cb.Clear();
+  req->recs = NULL;
+  req->atomic = true;
+  req->num = -1;
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
+      if (args[0]->ToObject()->Has(recs_sym)) {
+        req->recs = Obj2Map(args[0]->ToObject()->Get(recs_sym));
+      }
+      if (args[0]->ToObject()->Has(atomic_sym)) {
+        req->atomic = args[0]->ToObject()->Get(atomic_sym)->BooleanValue();
+      }
+    }
+  } else {
+    if (args[0]->ToObject()->Has(recs_sym)) {
+      req->recs = Obj2Map(args[0]->ToObject()->Get(recs_sym));
+    }
+    if (args[0]->ToObject()->Has(atomic_sym)) {
+      req->atomic = args[0]->ToObject()->Get(atomic_sym)->BooleanValue();
+    }
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+  
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return args.This();
+}
+
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -1034,7 +1119,22 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
           if (cnt <= 0) {
             gb_req->result = db->error().code();
           }
-          TRACE("get_bulk: ret = %d, error.code = %d\n", cnt, gb_req->result);
+          TRACE("get_bulk: ret = %ld, error.code = %d\n", cnt, gb_req->result);
+        }
+        break;
+      }
+    case KC_SET_BULK:
+      {
+        kc_set_bulk_req *sb_req = static_cast<kc_set_bulk_req*>(work_req->data);
+        if (sb_req->recs == NULL) {
+          sb_req->result = PolyDB::Error::INVALID;
+        } else {
+          int64_t num = db->set_bulk(*sb_req->recs, sb_req->atomic);
+          sb_req->num = num;
+          TRACE("set_bulk: ret = %ld\n", num);
+          if (num < 0) {
+            sb_req->result = db->error().code();
+          }
         }
         break;
       }
@@ -1137,6 +1237,12 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         }
         break;
       }
+    case KC_SET_BULK:
+      {
+        kc_set_bulk_req *sb_req = static_cast<kc_set_bulk_req*>(work_req->data);
+        argv[argc++] = Number::New(sb_req->num);
+        break;
+      }
     default:
       break;
   }
@@ -1232,6 +1338,16 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         free(req);
         break;
       }
+    case KC_SET_BULK:
+      {
+        kc_set_bulk_req *sb_req = static_cast<kc_set_bulk_req*>(work_req->data);
+        if (sb_req->recs) {
+          delete sb_req->recs;
+          sb_req->recs = NULL;
+        }
+        free(req);
+        break;
+      }
     default:
       assert(0);
   }
@@ -1270,6 +1386,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("status"), FunctionTemplate::New(Status)->GetFunction());
   prottpl->Set(String::NewSymbol("check"), FunctionTemplate::New(Check)->GetFunction());
   prottpl->Set(String::NewSymbol("get_bulk"), FunctionTemplate::New(GetBulk)->GetFunction());
+  prottpl->Set(String::NewSymbol("set_bulk"), FunctionTemplate::New(SetBulk)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);

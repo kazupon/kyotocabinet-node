@@ -1954,6 +1954,119 @@ describe('DB class tests', function () {
       });
     });
 
+
+    // 
+    // set_bulk
+    //
+    describe('db not open', function () {
+      it('should be `INVALID` error', function (done) {
+        var mdb = new DB();
+        mdb.set_bulk({ recs: {
+          key1: 'key1',
+          key2: 'key2'
+        }}, function (err, values) {
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var mdb;
+      var fname = 'set_bulk.kct';
+      before(function (done) {
+        mdb = new DB();
+        mdb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        mdb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function () {
+            done();
+          });
+        });
+      });
+      describe('call `set_bulk` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.set_bulk();
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with no specific `keys`', function () {
+          it('should be `INVALID` error', function (done) {
+            mdb.set_bulk({}, function (err) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.INVALID);
+              done();
+            });
+          });
+        });
+        describe('with specific `keys` type not object', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.set_bulk({ recs: 1 });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific `atomic` type not boolean', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.set_bulk({ recs: { key1: 'key1' }, atomic: 'hello' });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific parameter not object', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.set_bulk(1);
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+      });
+      describe('set `10` records', function () {
+        it('should be `success`', function (done) {
+          var recs = {};
+          var max = 10;
+          for (var i = 0; i < max; i++) {
+            recs['key' + (i + 1)] = 'key' + (i + 1);
+          }
+          mdb.set_bulk({ recs: recs, atomic: false }, function (err, num) {
+            if (err) { return done(err); }
+            num.should.eql(max);
+            mdb.get_bulk({ keys: Object.keys(recs) }, function (err, ret) {
+              if (err) { return done(err); }
+              ret.should.eql(recs);
+              mdb.count(function (err, cnt) {
+                if (err) { return done(err); }
+                cnt.should.eql(max);
+                done();
+              });
+            });
+          });
+        });
+      });
+    });
+
+
+
+
   });
 });
 
