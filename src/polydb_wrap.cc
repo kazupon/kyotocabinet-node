@@ -386,6 +386,7 @@ typedef struct kc_get_bulk_req {
   StringMap *recs;
 } kc_get_bulk_req;
 
+
 StringVector* Array2Vector(const Local<Value> obj) {
   StringVector *vector = new StringVector();
   Local<Array> array = Local<Array>::Cast(obj);
@@ -395,6 +396,19 @@ StringVector* Array2Vector(const Local<Value> obj) {
     vector->push_back(std::string(*val, val.length()));
   }
   return vector;
+}
+
+Local<Object> Map2Obj(const StringMap *map) {
+  Local<Object> obj = Object::New();
+  StringMap::const_iterator it = map->begin();
+  StringMap::const_iterator it_end = map->end();
+  while (it != it_end) {
+    Local<String> key = String::New(it->first.c_str(), it->first.length());
+    Local<String> val = String::New(it->second.c_str(), it->second.length());
+    obj->Set(key, val);
+    ++it;
+  }
+  return obj;
 }
 
 
@@ -856,13 +870,7 @@ Handle<Value> PolyDBWrap::GetBulk(const Arguments &args) {
       req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
     } else if (args[0]->IsObject()) {
       if (args[0]->ToObject()->Has(keys_sym)) {
-        req->keys = new StringVector();
-        Local<Array> array = Local<Array>::Cast(args[0]->ToObject()->Get(keys_sym));
-        int len = array->Length();
-        for (int i = 0; i < len; i++) {
-          String::Utf8Value val(array->Get(Integer::New(i))->ToString());
-          req->keys->push_back(std::string(*val, val.length()));
-        }
+        req->keys = Array2Vector(args[0]->ToObject()->Get(keys_sym));
       }
       if (args[0]->ToObject()->Has(atomic_sym)) {
         req->atomic = args[0]->ToObject()->Get(atomic_sym)->BooleanValue();
@@ -870,13 +878,7 @@ Handle<Value> PolyDBWrap::GetBulk(const Arguments &args) {
     }
   } else {
     if (args[0]->ToObject()->Has(keys_sym)) {
-      req->keys = new StringVector();
-      Local<Array> array = Local<Array>::Cast(args[0]->ToObject()->Get(keys_sym));
-      int len = array->Length();
-      for (int i = 0; i < len; i++) {
-        String::Utf8Value val(array->Get(Integer::New(i))->ToString());
-        req->keys->push_back(std::string(*val, val.length()));
-      }
+      req->keys = Array2Vector(args[0]->ToObject()->Get(keys_sym));
     }
     if (args[0]->ToObject()->Has(atomic_sym)) {
       req->atomic = args[0]->ToObject()->Get(atomic_sym)->BooleanValue();
@@ -1117,16 +1119,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       {
         if (req->result == PolyDB::Error::SUCCESS) {
           kc_strmap_ret_req_t *strmap_ret_req = static_cast<kc_strmap_ret_req_t*>(work_req->data);
-          Local<Object> ret = Object::New();
-          StringMap::const_iterator it = strmap_ret_req->ret->begin();
-          StringMap::const_iterator it_end = strmap_ret_req->ret->end();
-          while (it != it_end) {
-            Local<String> key = String::New(it->first.c_str(), it->first.length());
-            Local<String> val = String::New(it->second.c_str(), it->second.length());
-            ret->Set(key, val);
-            ++it;
-          }
-          argv[argc++] = ret;
+          argv[argc++] = Map2Obj(strmap_ret_req->ret);
         }
         break;
       }
@@ -1140,16 +1133,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       {
         if (req->result == PolyDB::Error::SUCCESS) {
           kc_get_bulk_req *gb_req = static_cast<kc_get_bulk_req*>(work_req->data);
-          Local<Object> recs = Object::New();
-          StringMap::const_iterator it = gb_req->recs->begin();
-          StringMap::const_iterator it_end = gb_req->recs->end();
-          while (it != it_end) {
-            Local<String> key = String::New(it->first.c_str(), it->first.length());
-            Local<String> val = String::New(it->second.c_str(), it->second.length());
-            recs->Set(key, val);
-            ++it;
-          }
-          argv[argc++] = recs;
+          argv[argc++] = Map2Obj(gb_req->recs);
         }
         break;
       }
