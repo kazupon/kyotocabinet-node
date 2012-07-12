@@ -108,6 +108,7 @@ namespace kc = kyotocabinet;
     req->type = Type;                                                           \
     req->result = PolyDB::Error::SUCCESS;                                       \
     req->wrapdb = obj;                                                          \
+    req->cb.Clear();                                                            \
     req->key = NULL;                                                            \
     req->value = NULL;                                                          \
                                                                                 \
@@ -177,6 +178,7 @@ namespace kc = kyotocabinet;
     req->type = Type;                                                           \
     req->result = PolyDB::Error::SUCCESS;                                       \
     req->wrapdb = obj;                                                          \
+    req->cb.Clear();                                                            \
     req->key = NULL;                                                            \
     req->value = NULL;                                                          \
                                                                                 \
