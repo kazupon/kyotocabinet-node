@@ -296,6 +296,7 @@ enum kc_req_type {
   KC_COUNT,
   KC_SIZE,
   KC_STATUS,
+  KC_CHECK,
 };
 
 // common request field
@@ -367,6 +368,13 @@ typedef struct kc_strmap_ret_req_t {
   KC_REQ_FIELD
   StringMap *ret;
 } kc_strmap_ret_req_t;
+
+// check request
+typedef struct kc_check_req {
+  KC_REQ_FIELD
+  char *key;
+  int64_t ret;
+} kc_check_req;
 
 
 PolyDBWrap::PolyDBWrap() {
@@ -735,6 +743,59 @@ DEFINE_RET_FUNC(Count, KC_COUNT, kc_ret_req_t, -1);
 DEFINE_RET_FUNC(Size, KC_SIZE, kc_ret_req_t, -1);
 DEFINE_RET_FUNC(Status, KC_STATUS, kc_strmap_ret_req_t, NULL);
 
+Handle<Value> PolyDBWrap::Check(const Arguments &args) {
+  TRACE("Check\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> key_sym = String::NewSymbol("key");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
+       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_check_req *check_req = (kc_check_req *)malloc(sizeof(kc_check_req));
+  check_req->type = KC_CHECK;
+  check_req->result = PolyDB::Error::SUCCESS;
+  check_req->wrapdb = obj;
+  check_req->cb.Clear();
+  check_req->key = NULL;
+  check_req->ret = -1;
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      check_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
+      assert(args[0]->IsObject());
+      if (args[0]->ToObject()->Has(key_sym)) {
+        String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
+        check_req->key = kc::strdup(*key);
+      }
+    }
+  } else {
+    if (args[0]->ToObject()->Has(key_sym)) {
+      String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
+      check_req->key = kc::strdup(*key);
+    }
+    check_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+  
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = check_req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return args.This();
+}
+
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -849,6 +910,19 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
         }
         break;
       }
+    case KC_CHECK:
+      {
+        kc_check_req *check_req = static_cast<kc_check_req*>(work_req->data);
+        if (check_req->key == NULL) {
+          check_req->result = PolyDB::Error::INVALID;
+        } else {
+          check_req->ret = db->check(check_req->key, strlen(check_req->key));
+          if (check_req->ret == -1) {
+            check_req->result = db->error().code();
+          }
+        }
+        break;
+      }
     default:
       assert(0);
   }
@@ -943,6 +1017,12 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         }
         break;
       }
+    case KC_CHECK:
+      {
+        kc_check_req *check_req = static_cast<kc_check_req*>(work_req->data);
+        argv[argc++] = Number::New(check_req->ret);
+        break;
+      }
     default:
       break;
   }
@@ -1022,6 +1102,8 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         free(req);
         break;
       }
+    case KC_CHECK:
+      { K_FREE(work_req, kc_check_req); break; }
     default:
       assert(0);
   }
@@ -1058,6 +1140,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("count"), FunctionTemplate::New(Count)->GetFunction());
   prottpl->Set(String::NewSymbol("size"), FunctionTemplate::New(Size)->GetFunction());
   prottpl->Set(String::NewSymbol("status"), FunctionTemplate::New(Status)->GetFunction());
+  prottpl->Set(String::NewSymbol("check"), FunctionTemplate::New(Check)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);

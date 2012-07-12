@@ -1725,7 +1725,113 @@ describe('DB class tests', function () {
     });
 
 
-
+    // 
+    // check
+    //
+    describe('db not open', function () {
+      it('should be `INVALID` error', function (done) {
+        var mdb = new DB();
+        mdb.check(function (err, ret) {
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var mdb;
+      var fname = 'check.kch';
+      before(function (done) {
+        mdb = new DB();
+        mdb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        mdb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function () {
+            done();
+          });
+        });
+      });
+      describe('call `check` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.check();
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with no specific `key`', function () {
+          it('should be `INVALID` error', function (done) {
+            mdb.check({}, function (err) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.INVALID);
+              done();
+            });
+          });
+        });
+        describe('with specific `key` type not string', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.check({ key: 1 });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific parameter not object', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.check(1);
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+      });
+      describe('not regist record in db', function () {
+        it('should be `NOREC` error', function (done) {
+          mdb.check({ key: 'check1' }, function (err, size) {
+            size.should.eql(-1);
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+        describe('add key `check1` record', function () {
+          it('should be get `5` size', function (done) {
+            mdb.add({ key: 'check1', value: 'hello' }, function (err) {
+              if (err) { return done(err); }
+              mdb.check({ key: 'check1' }, function (err, size) {
+                if (err) { return done(err); }
+                size.should.eql(5);
+                done();
+              });
+            });
+          });
+          describe('add key `チェック1` record', function () {
+            it('should be get `9` size', function (done) {
+              mdb.add({ key: 'チェック1', value: 'チェック' }, function (err) {
+                if (err) { return done(err); }
+                mdb.check({ key: 'チェック1' }, function (err, size) {
+                  if (err) { return done(err); }
+                  size.should.eql(12);
+                  done();
+                });
+              });
+            });
+          });
+        });
+      });
+    });
   });
 });
 
