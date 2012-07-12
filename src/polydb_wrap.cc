@@ -302,6 +302,7 @@ enum kc_req_type {
   KC_REMOVE_BULK,
   KC_MATCH_PREFIX,
   KC_MATCH_REGEX,
+  KC_MATCH_SIMILAR,
 };
 
 // common request field
@@ -421,6 +422,16 @@ typedef struct kc_match_regex_req {
   int64_t max;
   StringVector *keys;
 } kc_match_regex_req;
+
+// match_similar request
+typedef struct kc_match_similar_req {
+  KC_REQ_FIELD
+  char *origin;
+  int64_t max;
+  int64_t range;
+  bool utf;
+  StringVector *keys;
+} kc_match_similar_req;
 
 
 StringVector* Array2Vector(const Local<Value> obj) {
@@ -1205,6 +1216,88 @@ Handle<Value> PolyDBWrap::MatchRegex(const Arguments &args) {
   return args.This();
 }
 
+Handle<Value> PolyDBWrap::MatchSimilar(const Arguments &args) {
+  TRACE("MatchSimilar\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> origin_sym = String::NewSymbol("origin");
+  Local<String> max_sym = String::NewSymbol("max");
+  Local<String> range_sym = String::NewSymbol("range");
+  Local<String> utf_sym = String::NewSymbol("utf");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(origin_sym) && !args[0]->ToObject()->Get(origin_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && !args[0]->ToObject()->Get(max_sym)->IsNumber()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(range_sym) && !args[0]->ToObject()->Get(range_sym)->IsNumber()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(utf_sym) && !args[0]->ToObject()->Get(utf_sym)->IsBoolean()) ||
+       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(origin_sym) && !args[0]->ToObject()->Get(origin_sym)->IsString()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && !args[0]->ToObject()->Get(max_sym)->IsNumber()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(range_sym) && !args[0]->ToObject()->Get(range_sym)->IsNumber()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(utf_sym) && !args[0]->ToObject()->Get(utf_sym)->IsBoolean()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_match_similar_req *req = (kc_match_similar_req *)malloc(sizeof(kc_match_similar_req));
+  req->type = KC_MATCH_SIMILAR;
+  req->result = PolyDB::Error::SUCCESS;
+  req->wrapdb = obj;
+  req->cb.Clear();
+  req->origin = NULL;
+  req->max = -1;
+  req->utf = false;
+  req->range = 1;
+  req->keys = NULL;
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
+      if (args[0]->ToObject()->Has(origin_sym)) {
+        String::Utf8Value origin(args[0]->ToObject()->Get(origin_sym));
+        req->origin = kc::strdup(*origin);
+      }
+      if (args[0]->ToObject()->Has(max_sym)) {
+        req->max = args[0]->ToObject()->Get(max_sym)->NumberValue();
+      }
+      if (args[0]->ToObject()->Has(range_sym)) {
+        req->range = args[0]->ToObject()->Get(range_sym)->NumberValue();
+      }
+      if (args[0]->ToObject()->Has(utf_sym)) {
+        req->utf = args[0]->ToObject()->Get(utf_sym)->BooleanValue();
+      }
+    }
+  } else {
+    if (args[0]->ToObject()->Has(origin_sym)) {
+      String::Utf8Value origin(args[0]->ToObject()->Get(origin_sym));
+      req->origin = kc::strdup(*origin);
+    }
+    if (args[0]->ToObject()->Has(max_sym)) {
+      req->max = args[0]->ToObject()->Get(max_sym)->NumberValue();
+    }
+    if (args[0]->ToObject()->Has(range_sym)) {
+      req->range = args[0]->ToObject()->Get(range_sym)->NumberValue();
+    }
+    if (args[0]->ToObject()->Has(utf_sym)) {
+      req->utf = args[0]->ToObject()->Get(utf_sym)->BooleanValue();
+    }
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+  
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return args.This();
+}
+
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -1407,6 +1500,21 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
         }
         break;
       }
+    case KC_MATCH_SIMILAR:
+      {
+        kc_match_similar_req *ms_req = static_cast<kc_match_similar_req*>(work_req->data);
+        if (ms_req->origin == NULL) {
+          ms_req->result = PolyDB::Error::INVALID;
+        } else {
+          ms_req->keys = new StringVector();
+          int64_t num = db->match_similar(std::string(ms_req->origin, strlen(ms_req->origin)), ms_req->range, ms_req->utf, ms_req->keys, ms_req->max);
+          if (num <= 0) {
+            ms_req->result = db->error().code();
+          }
+          TRACE("match_similar: ret = %ld\n", num);
+        }
+        break;
+      }
     default:
       assert(0);
   }
@@ -1534,6 +1642,14 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         }
         break;
       }
+    case KC_MATCH_SIMILAR:
+      {
+        if (req->result == PolyDB::Error::SUCCESS) {
+          kc_match_similar_req *ms_req = static_cast<kc_match_similar_req*>(work_req->data);
+          argv[argc++] = Vector2Array(ms_req->keys);
+        }
+        break;
+      }
     default:
       break;
   }
@@ -1654,7 +1770,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         kc_match_prefix_req *mp_req = static_cast<kc_match_prefix_req*>(work_req->data);
         if (mp_req->prefix) {
           free(mp_req->prefix);
-          mp_req->keys = NULL;
+          mp_req->prefix = NULL;
         }
         if (mp_req->keys) {
           delete mp_req->keys;
@@ -1668,11 +1784,25 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         kc_match_regex_req *mr_req = static_cast<kc_match_regex_req*>(work_req->data);
         if (mr_req->regex) {
           free(mr_req->regex);
-          mr_req->keys = NULL;
+          mr_req->regex = NULL;
         }
         if (mr_req->keys) {
           delete mr_req->keys;
           mr_req->keys = NULL;
+        }
+        free(req);
+        break;
+      }
+    case KC_MATCH_SIMILAR:
+      {
+        kc_match_similar_req *ms_req = static_cast<kc_match_similar_req*>(work_req->data);
+        if (ms_req->origin) {
+          free(ms_req->origin);
+          ms_req->origin = NULL;
+        }
+        if (ms_req->keys) {
+          delete ms_req->keys;
+          ms_req->keys = NULL;
         }
         free(req);
         break;
@@ -1719,6 +1849,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("remove_bulk"), FunctionTemplate::New(RemoveBulk)->GetFunction());
   prottpl->Set(String::NewSymbol("match_prefix"), FunctionTemplate::New(MatchPrefix)->GetFunction());
   prottpl->Set(String::NewSymbol("match_regex"), FunctionTemplate::New(MatchRegex)->GetFunction());
+  prottpl->Set(String::NewSymbol("match_similar"), FunctionTemplate::New(MatchSimilar)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);

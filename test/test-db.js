@@ -2438,7 +2438,7 @@ describe('DB class tests', function () {
             }
           });
         });
-        describe('with no specific `prefix`', function () {
+        describe('with no specific `regex`', function () {
           it('should be `INVALID` error', function (done) {
             mdb.match_regex({}, function (err) {
               err.should.have.property('code');
@@ -2520,7 +2520,7 @@ describe('DB class tests', function () {
               });
             });
           });
-          describe('with specific prefix -> `ey|oo` max -> `2`', function () {
+          describe('with specific regex -> `ey|oo` max -> `2`', function () {
             it('should be get `2` keys', function (done) {
               mdb.match_regex({ regex: 'ey|oo', max: 2 }, function (err, keys) {
                 if (err) { return done(err); }
@@ -2530,7 +2530,7 @@ describe('DB class tests', function () {
               });
             });
           });
-          describe('with specific prefix -> `^b.*` max -> `-1`', function () {
+          describe('with specific regex -> `^b.*` max -> `-1`', function () {
             it('should be get `2` keys', function (done) {
               mdb.match_regex({ regex: '^b.*', max: -1 }, function (err, keys) {
                 if (err) { return done(err); }
@@ -2542,7 +2542,7 @@ describe('DB class tests', function () {
               });
             });
           });
-          describe('with specific prefix -> `key` (max ommit)', function () {
+          describe('with specific regex -> `key` (max ommit)', function () {
             it('should be get `5` keys', function (done) {
               mdb.match_regex({ regex: 'key' }, function (err, keys) {
                 if (err) { return done(err); }
@@ -2560,6 +2560,193 @@ describe('DB class tests', function () {
         });
       });
     });
+
+
+    // 
+    // match_similar
+    //
+    describe('db not open', function () {
+      it('should be `INVALID` error', function (done) {
+        var mdb = new DB();
+        mdb.match_similar({ origin: 'hoge' }, function (err, keys) {
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var mdb;
+      var fname = 'match_similar.kct';
+      before(function (done) {
+        mdb = new DB();
+        mdb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        mdb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function () {
+            done();
+          });
+        });
+      });
+      describe('call `match_similar` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.match_similar();
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with no specific `origin`', function () {
+          it('should be `INVALID` error', function (done) {
+            mdb.match_similar({}, function (err) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.INVALID);
+              done();
+            });
+          });
+        });
+        describe('with specific `origin` type not string', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.match_similar({ origin: 1 });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific `max` type not number', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.match_similar({ origin: 'key', max: 'hello' });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific `range` type not number', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.match_similar({ origin: 'key', range: 'hello' });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific `utf` type not boolean', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.match_similar({ origin: 'key', utf: 'hello' });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific parameter not object', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.match_similar(1);
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+      });
+      describe('not regist record in db', function () {
+        it('should be `NOREC` error', function (done) {
+          mdb.match_similar({ origin: 'key' }, function (err, keys) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+        describe('add `5` records', function () {
+          before(function (done) {
+            var recs = {};
+            recs['japan'] = 'japan';
+            recs['japanese'] = 'japanese';
+            recs['javan'] = 'javan';
+            recs['日本'] = '日本';
+            recs['にほん'] = 'にほん';
+            mdb.set_bulk({ recs: recs }, function (err, num) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+
+          describe('with specific origin-> `japan` max -> `5`, range -> `3`, utf -> `true`', function () {
+            it('should be get `3` keys', function (done) {
+              mdb.match_similar({ origin: 'japan', max: 5, range: 3, utf: true }, function (err, keys) {
+                if (err) { return done(err); }
+                console.log(keys);
+                Object.keys(keys).should.have.length(3);
+                keys.should.include('japan');
+                keys.should.include('japanese');
+                keys.should.include('javan');
+                done();
+              });
+            });
+          });
+          describe('with specific origin -> `japan` max -> `-1`, range -> `1`, utf -> `false`', function () {
+            it('should be get `2` keys', function (done) {
+              mdb.match_similar({ origin: 'japan', max: -1, range: 1, utf: false }, function (err, keys) {
+                if (err) { return done(err); }
+                console.log(keys);
+                Object.keys(keys).should.have.length(2);
+                keys.should.include('japan');
+                keys.should.include('javan');
+                done();
+              });
+            });
+          });
+          describe('with specific origin -> `japan`, range -> `1`, utf -> `true` (max ommit)', function () {
+            it('should be get `2` keys', function (done) {
+              mdb.match_similar({ origin: 'japan', range: 1, utf: true }, function (err, keys) {
+                if (err) { return done(err); }
+                console.log(keys);
+                Object.keys(keys).should.have.length(2);
+                keys.should.include('japan');
+                keys.should.include('javan');
+                done();
+              });
+            });
+          });
+          describe('with specific origin -> `japan` max -> `1`, utf -> `false` (range ommit)', function () {
+            it('should be get `1` keys', function (done) {
+              mdb.match_similar({ origin: 'japan', max: 1, utf: false }, function (err, keys) {
+                if (err) { return done(err); }
+                console.log(keys);
+                Object.keys(keys).should.have.length(1);
+                done();
+              });
+            });
+          });
+          describe('with specific origin -> `japan` max -> `2`, range -> `1` (utf ommit)', function () {
+            it('should be get `2` keys', function (done) {
+              mdb.match_similar({ origin: 'japan', max: 2, range: 1 }, function (err, keys) {
+                if (err) { return done(err); }
+                console.log(keys);
+                Object.keys(keys).should.have.length(2);
+                done();
+              });
+            });
+          });
+        });
+      });
+    });
+
 
 
 
