@@ -47,6 +47,7 @@ class PolyDBWrap : public ObjectWrap {
     static Handle<Value> MatchRegex(const Arguments &args);
     static Handle<Value> MatchSimilar(const Arguments &args);
     static Handle<Value> Copy(const Arguments &args);
+    static Handle<Value> Merge(const Arguments &args);
 
     static Persistent<FunctionTemplate> ctor;
     static Persistent<String> code_symbol;

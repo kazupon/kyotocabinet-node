@@ -9,6 +9,7 @@
 #include <assert.h>
 #include "debug.h"
 #include <kcdbext.h>
+#include <kcdb.h>
 
 using namespace v8;
 namespace kc = kyotocabinet;
@@ -304,6 +305,7 @@ enum kc_req_type {
   KC_MATCH_REGEX,
   KC_MATCH_SIMILAR,
   KC_COPY,
+  KC_MERGE,
 };
 
 // common request field
@@ -440,6 +442,14 @@ typedef struct kc_copy_req {
   char *path;
 } kc_copy_req;
 
+// merge request
+typedef struct kc_merge_req {
+  KC_REQ_FIELD
+  kc::BasicDB **srcary;
+  int32_t srcnum;
+  uint32_t mode;
+} kc_merge_req;
+
 
 StringVector* Array2Vector(const Local<Value> obj) {
   StringVector *vector = new StringVector();
@@ -496,14 +506,14 @@ StringMap* Obj2Map(const Local<Value> target) {
 
 
 PolyDBWrap::PolyDBWrap() {
-  TRACE("constructor\n");
   db_ = new PolyDB();
+  TRACE("ctor: db_ = %p\n", db_);
   assert(db_ != NULL);
 }
 
 PolyDBWrap::~PolyDBWrap() {
-  TRACE("destructor\n");
   assert(db_ != NULL);
+  TRACE("destor: db_ = %p\n", db_);
   delete db_;
   db_ = NULL;
 }
@@ -1349,6 +1359,83 @@ Handle<Value> PolyDBWrap::Copy(const Arguments &args) {
   return args.This();
 }
 
+Handle<Value> PolyDBWrap::Merge(const Arguments &args) {
+  TRACE("Merge\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> srcary_sym = String::NewSymbol("srcary");
+  Local<String> mode_sym = String::NewSymbol("mode");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(srcary_sym) && !args[0]->ToObject()->Get(srcary_sym)->IsArray()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(mode_sym) && !args[0]->ToObject()->Get(mode_sym)->IsNumber()) ||
+       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(srcary_sym) && !args[0]->ToObject()->Get(srcary_sym)->IsArray()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(mode_sym) && !args[0]->ToObject()->Get(mode_sym)->IsNumber()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_merge_req *req = (kc_merge_req *)malloc(sizeof(kc_merge_req));
+  req->type = KC_MERGE;
+  req->result = PolyDB::Error::SUCCESS;
+  req->wrapdb = obj;
+  req->cb.Clear();
+  req->srcary = NULL;
+  req->srcnum = -1;
+  req->mode = PolyDB::MSET;
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
+      if (args[0]->ToObject()->Has(srcary_sym)) {
+        Local<Array> array = Local<Array>::Cast(args[0]->ToObject()->Get(srcary_sym));
+        int32_t num = array->Length();
+        req->srcary = new kc::BasicDB*[num];
+        int32_t i = 0;
+        for (i = 0; i < num; i++) {
+          PolyDBWrap *dbwrap = ObjectWrap::Unwrap<PolyDBWrap>(Local<Object>::Cast(array->Get(Integer::New(i))));
+          req->srcary[i] = dbwrap->db_;
+        }
+        req->srcnum = i;
+      }
+      if (args[0]->ToObject()->Has(mode_sym)) {
+        req->mode = args[0]->ToObject()->Get(mode_sym)->NumberValue();
+      }
+    }
+  } else {
+    if (args[0]->ToObject()->Has(srcary_sym)) {
+      Local<Array> array = Local<Array>::Cast(args[0]->ToObject()->Get(srcary_sym));
+      int32_t num = array->Length();
+      req->srcary = new kc::BasicDB*[num];
+      int32_t i = 0;
+      for (i = 0; i < num; i++) {
+        PolyDBWrap *dbwrap = ObjectWrap::Unwrap<PolyDBWrap>(Local<Object>::Cast(array->Get(Integer::New(i))));
+        TRACE("dbwrap = %p, db_ = %p\n", dbwrap, dbwrap->db_);
+        req->srcary[i] = dbwrap->db_;
+      }
+      req->srcnum = i;
+    }
+    if (args[0]->ToObject()->Has(mode_sym)) {
+      req->mode = args[0]->ToObject()->Get(mode_sym)->NumberValue();
+    }
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+  
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return args.This();
+}
+
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -1575,6 +1662,22 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
           req->result = PolyDB::Error::INVALID;
         } else {
           if (!db->copy(copy_req->path)) {
+            req->result = db->error().code();
+          }
+        }
+        break;
+      }
+    case KC_MERGE:
+      {
+        kc_merge_req *merge_req = static_cast<kc_merge_req*>(work_req->data);
+        TRACE("merge: srcary = %p, srcnum = %d, mode = %d\n", merge_req->srcary, merge_req->srcnum, merge_req->mode);
+        if (merge_req->srcary == NULL || merge_req->srcnum == -1 ||
+            !(merge_req->mode == PolyDB::MSET || 
+              merge_req->mode == PolyDB::MADD || 
+              merge_req->mode == PolyDB::MAPPEND)) {
+          req->result = PolyDB::Error::INVALID;
+        } else {
+          if (!db->merge(merge_req->srcary, merge_req->srcnum, (PolyDB::MergeMode)merge_req->mode)) {
             req->result = db->error().code();
           }
         }
@@ -1882,6 +1985,16 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         free(req);
         break;
       }
+    case KC_MERGE:
+      {
+        kc_merge_req *merge_req = static_cast<kc_merge_req*>(work_req->data);
+        if (merge_req->srcary) {
+          delete[] merge_req->srcary;
+          merge_req->srcary = NULL;
+        }
+        free(req);
+        break;
+      }
     default:
       assert(0);
   }
@@ -1926,6 +2039,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("match_regex"), FunctionTemplate::New(MatchRegex)->GetFunction());
   prottpl->Set(String::NewSymbol("match_similar"), FunctionTemplate::New(MatchSimilar)->GetFunction());
   prottpl->Set(String::NewSymbol("copy"), FunctionTemplate::New(Copy)->GetFunction());
+  prottpl->Set(String::NewSymbol("merge"), FunctionTemplate::New(Merge)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);

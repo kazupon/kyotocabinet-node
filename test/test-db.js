@@ -2858,6 +2858,223 @@ describe('DB class tests', function () {
     });
 
 
+    // 
+    // merge
+    //
+    describe('db not open', function () {
+      it('should be `INVALID` error', function (done) {
+        var mdb = new DB();
+        mdb.copy('merge.kct', function (err) {
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var mdb;
+      var fname = 'merge.kct';
+      var dbs = [];
+      before(function (done) {
+        dbs = [];
+        mdb = new DB();
+        mdb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          new DB().open({ path: '+', mode: DB.OWRITER + DB.OCREATE }, function (err) {
+            if (err) { return done(err); }
+            dbs.push(this);
+            new DB().open({ path: '%', mode: DB.OWRITER + DB.OCREATE }, function (err) {
+              if (err) { return done(err); }
+              dbs.push(this);
+              done();
+            });
+          });
+        });
+      });
+      after(function (done) {
+        mdb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function () {
+            var cnt = 0;
+            var len = dbs.length;
+            dbs.forEach(function (db) {
+              db.close(function (err) {
+                if (err) { return done(err); }
+                cnt++;
+                if (cnt === len) { return done() }
+              });
+            });
+          });
+        });
+      });
+      afterEach(function (done) {
+        mdb.clear(function (err) {
+          if (err) { return done(err); }
+          var cnt = 0;
+          var len = dbs.length;
+          dbs.forEach(function (db) {
+            db.clear(function (err) {
+              if (err) { return done(err); }
+              cnt++;
+              if (cnt === len) { return done() }
+            });
+          });
+        });
+      });
+      describe('call `merge` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.merge();
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific `srcary` type not array', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.merge({ srcary: 1 });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific `mode` type not number', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.merge({ srcary: dbs, mode: 'hello' });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+      });
+      describe('with specific mode -> `MSET`', function () {
+        before(function (done) {
+          dbs[0].set_bulk({
+            recs: { key1: 'hello', key2: 'world' }
+          }, function (err) {
+            if (err) { return done(err); }
+            dbs[1].set_bulk({
+              recs: { key1: 'world', key2: 'hoge', key3: 'dio' }
+            }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        it('should be merge `success`', function (done) {
+          mdb.merge({ srcary: dbs, mode: DB.MSET }, function (err) {
+            if (err) { return done(err); }
+            mdb.count(function (err, cnt) {
+              cnt.should.eql(3);
+              if (err) { return done(err); }
+              mdb.get_bulk({ keys: [ 'key1', 'key2', 'key3' ] }, function (err, recs) {
+                if (err) { return done(err); }
+                console.log(recs);
+                recs.key1.should.eql('world');
+                recs.key2.should.eql('hoge');
+                recs.key3.should.eql('dio');
+                done();
+              });
+            });
+          });
+        });
+      });
+      describe('with specific mode -> `MADD`', function () {
+        before(function (done) {
+          dbs[0].set_bulk({
+            recs: { key1: 'hello', key2: 'world' }
+          }, function (err) {
+            if (err) { return done(err); }
+            dbs[1].set_bulk({
+              recs: { key1: 'world', key2: 'hoge', key3: 'dio' }
+            }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        it('should be merge `success`', function (done) {
+          mdb.merge({ srcary: dbs, mode: DB.MADD }, function (err) {
+            if (err) { return done(err); }
+            mdb.count(function (err, cnt) {
+              cnt.should.eql(3);
+              if (err) { return done(err); }
+              mdb.get_bulk({ keys: [ 'key1', 'key2', 'key3' ] }, function (err, recs) {
+                if (err) { return done(err); }
+                console.log(recs);
+                recs.key1.should.eql('hello');
+                recs.key2.should.eql('world');
+                recs.key3.should.eql('dio');
+                done();
+              });
+            });
+          });
+        });
+      });
+      describe('with specific mode -> `MAPPEND`', function () {
+        before(function (done) {
+          dbs[0].set_bulk({
+            recs: { key1: 'hello', key2: 'world' }
+          }, function (err) {
+            if (err) { return done(err); }
+            dbs[1].set_bulk({
+              recs: { key1: 'world', key2: 'hoge', key3: 'dio' }
+            }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        it('should be merge `success`', function (done) {
+          mdb.merge({ srcary: dbs, mode: DB.MAPPEND }, function (err) {
+            if (err) { return done(err); }
+            mdb.count(function (err, cnt) {
+              cnt.should.eql(3);
+              if (err) { return done(err); }
+              mdb.get_bulk({ keys: [ 'key1', 'key2', 'key3' ] }, function (err, recs) {
+                if (err) { return done(err); }
+                console.log(recs);
+                recs.key1.should.eql('helloworld');
+                recs.key2.should.eql('worldhoge');
+                recs.key3.should.eql('dio');
+                done();
+              });
+            });
+          });
+        });
+      });
+      describe('with specific mode -> `unknown value`', function () {
+        before(function (done) {
+          dbs[0].set_bulk({
+            recs: { key1: 'hello', key2: 'world' }
+          }, function (err) {
+            if (err) { return done(err); }
+            dbs[1].set_bulk({
+              recs: { key1: 'world', key2: 'hoge', key3: 'dio' }
+            }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        it('should be `INVALID` error', function (done) {
+          mdb.merge({ srcary: dbs, mode: 256 }, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+    });
+
+
+
   });
 });
 
