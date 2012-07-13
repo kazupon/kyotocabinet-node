@@ -48,6 +48,49 @@ namespace kc = kyotocabinet;
     return args.This();                                                     \
   }                                                                         \
 
+#define DEFINE_CHAR_PARAM_FUNC(Name, Type)                                            \
+  Handle<Value> PolyDBWrap::Name(const Arguments &args) {                             \
+    HandleScope scope;                                                                \
+                                                                                      \
+    PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());                    \
+    assert(obj != NULL);                                                              \
+                                                                                      \
+    if ( (args.Length() == 0) ||                                                      \
+         (args.Length() == 1 && (!args[0]->IsString()) | !args[0]->IsFunction()) ) {  \
+      ThrowException(Exception::TypeError(String::New("Bad argument")));              \
+      return args.This();                                                             \
+    }                                                                                 \
+                                                                                      \
+    kc_char_cmn_req_t *req = (kc_char_cmn_req_t *)malloc(sizeof(kc_char_cmn_req_t));  \
+    req->type = Type;                                                                 \
+    req->result = PolyDB::Error::SUCCESS;                                             \
+    req->wrapdb = obj;                                                                \
+    req->cb.Clear();                                                                  \
+    req->str = NULL;                                                                  \
+                                                                                      \
+    if (args.Length() == 1) {                                                         \
+      if (args[0]->IsFunction()) {                                                    \
+        req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));         \
+      } else if (args[0]->IsString()) {                                               \
+        String::Utf8Value str(args[0]->ToString());                                   \
+        req->str = kc::strdup(*str);                                                  \
+      }                                                                               \
+    } else {                                                                          \
+      String::Utf8Value str(args[0]->ToString());                                     \
+      req->str = kc::strdup(*str);                                                    \
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));           \
+    }                                                                                 \
+                                                                                      \
+    uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));                       \
+    uv_req->data = req;                                                               \
+                                                                                      \
+    int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);           \
+    TRACE("uv_queue_work: ret=%d\n", ret);                                            \
+                                                                                      \
+    obj->Ref();                                                                       \
+    return args.This();                                                               \
+  }                                                                                   \
+
 #define DEFINE_RET_FUNC(Name, Type, REQ_TYPE, INIT_VALUE)                   \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                   \
     HandleScope scope;                                                      \
@@ -225,15 +268,26 @@ namespace kc = kyotocabinet;
     req->result = db->error().code();   \
   }                                     \
 
-#define DO_RET_EXECUTE(Method, work_req)                            \
-  kc_ret_req_t *req = static_cast<kc_ret_req_t *>(work_req->data);  \
+#define DO_CHAR_PARAM_CMN_EXECUTE(Method, WorkReq)                         \
+  kc_char_cmn_req_t *req = static_cast<kc_char_cmn_req_t*>(WorkReq->data); \
+  if (req->str == NULL) {                                                  \
+    req->result = PolyDB::Error::INVALID;                                  \
+  } else {                                                                 \
+    if (!db->Method(req->str)) {                                           \
+      req->result = db->error().code();                                    \
+    }                                                                      \
+  }                                                                        \
+
+#define DO_RET_EXECUTE(Method, WorkReq)                             \
+  kc_ret_req_t *req = static_cast<kc_ret_req_t*>(WorkReq->data);    \
   req->ret = db->Method();                                          \
+  TRACE("ret = %d\n", req->ret);                                    \
   if (req->ret == -1) {                                             \
     req->result = db->error().code();                               \
   }                                                                 \
 
-#define DO_KV_V_RET_EXECUTE(Method, work_req)                           \
-  kc_kv_req_t *req = static_cast<kc_kv_req_t *>(work_req->data);        \
+#define DO_KV_V_RET_EXECUTE(Method, WorkReq)                            \
+  kc_kv_req_t *req = static_cast<kc_kv_req_t*>(WorkReq->data);          \
   TRACE("key = %s\n", req->key);                                        \
   size_t value_size;                                                    \
   if (req->key == NULL) {                                               \
@@ -246,8 +300,8 @@ namespace kc = kyotocabinet;
     }                                                                   \
   }                                                                     \
 
-#define DO_KV_EXECUTE(Method, work_req)                           \
-  kc_kv_req_t *req = static_cast<kc_kv_req_t *>(work_req->data);  \
+#define DO_KV_EXECUTE(Method, WorkReq)                            \
+  kc_kv_req_t *req = static_cast<kc_kv_req_t*>(WorkReq->data);    \
   TRACE("key = %s, value = %s\n", req->key, req->value);          \
   if (req->key == NULL || req->value == NULL) {                   \
     req->result = PolyDB::Error::INVALID;                         \
@@ -258,25 +312,30 @@ namespace kc = kyotocabinet;
     }                                                             \
   }                                                               \
 
-#define KV_FREE(work_req)                                         \
-  kc_kv_req_t *req = static_cast<kc_kv_req_t *>(work_req->data);  \
-  if (req->key != NULL) {                                         \
-    free(req->key);                                               \
-    req->key = NULL;                                              \
-  }                                                               \
-  if (req->value != NULL) {                                       \
-    free(req->value);                                             \
-    req->value = NULL;                                            \
-  }                                                               \
-  free(req);                                                      \
+#define DO_MATCH_CMN_EXECUTE(Method, WorkReq)                                               \
+  kc_match_cmn_req_t *req = static_cast<kc_match_cmn_req_t*>(WorkReq->data);                \
+  if (req->str == NULL) {                                                                   \
+    req->result = PolyDB::Error::INVALID;                                                   \
+  } else {                                                                                  \
+    req->keys = new StringVector();                                                         \
+    int64_t num = db->Method(std::string(req->str, strlen(req->str)), req->keys, req->max); \
+    TRACE("match return: %ld\n", num);                                                      \
+    if (num <= 0) {                                                                         \
+      req->result = db->error().code();                                                     \
+    }                                                                                       \
+  }                                                                                         \
 
-#define K_FREE(work_req, REQ_TYPE)                          \
-  REQ_TYPE *req = static_cast<REQ_TYPE *>(work_req->data);  \
-  if (req->key != NULL) {                                   \
-    free(req->key);                                         \
-    req->key = NULL;                                        \
-  }                                                         \
-  free(req);                                                \
+#define SAFE_REQ_ATTR_FREE(Req, AttrName)   \
+  if (Req->AttrName != NULL) {              \
+    free(Req->AttrName);                    \
+    Req->AttrName = NULL;                   \
+  }                                         \
+
+#define SAFE_REQ_ATTR_DELETE(Req, AttrName)   \
+  if (Req->AttrName) {                        \
+    delete Req->AttrName;                     \
+    Req->AttrName = NULL;                     \
+  }                                           \
 
 
 // request type
@@ -339,12 +398,6 @@ typedef struct kc_kv_req_t {
   char *value;
 } kc_kv_req_t;
 
-// remove request
-typedef struct kc_remove_req_t {
-  KC_REQ_FIELD
-  char *key;
-} kc_remove_req_t;
-
 // increment request
 typedef struct kc_increment_req_t {
   KC_REQ_FIELD
@@ -382,75 +435,69 @@ typedef struct kc_strmap_ret_req_t {
 } kc_strmap_ret_req_t;
 
 // check request
-typedef struct kc_check_req {
+typedef struct kc_check_req_t {
   KC_REQ_FIELD
   char *key;
   int64_t ret;
-} kc_check_req;
+} kc_check_req_t;
 
 // get_bulk request
-typedef struct kc_get_bulk_req {
+typedef struct kc_get_bulk_req_t {
   KC_REQ_FIELD
   StringVector *keys;
   bool atomic;
   StringMap *recs;
-} kc_get_bulk_req;
+} kc_get_bulk_req_t;
 
 // set_bulk request
-typedef struct kc_set_bulk_req {
+typedef struct kc_set_bulk_req_t {
   KC_REQ_FIELD
   StringMap *recs;
   bool atomic;
   int64_t num;
-} kc_set_bulk_req;
+} kc_set_bulk_req_t;
 
 // remove_bulk request
-typedef struct kc_remove_bulk_req {
+typedef struct kc_remove_bulk_req_t {
   KC_REQ_FIELD
   StringVector *keys;
   bool atomic;
   int64_t num;
-} kc_remove_bulk_req;
+} kc_remove_bulk_req_t;
 
-// match_prefix request
-typedef struct kc_match_prefix_req {
-  KC_REQ_FIELD
-  char *prefix;
-  int64_t max;
-  StringVector *keys;
-} kc_match_prefix_req;
+// match common request field
+#define KC_MATCH_REQ_FIELD    \
+  char *str;                  \
+  int64_t max;                \
+  StringVector *keys;         \
 
-// match_regex request
-typedef struct kc_match_regex_req {
+// match common request
+typedef struct kc_match_cmn_req_t {
   KC_REQ_FIELD
-  char *regex;
-  int64_t max;
-  StringVector *keys;
-} kc_match_regex_req;
+  KC_MATCH_REQ_FIELD
+} kc_match_cmn_req_t;
 
 // match_similar request
-typedef struct kc_match_similar_req {
+typedef struct kc_match_similar_req_t {
   KC_REQ_FIELD
-  char *origin;
-  int64_t max;
+  KC_MATCH_REQ_FIELD
   int64_t range;
   bool utf;
-  StringVector *keys;
-} kc_match_similar_req;
+} kc_match_similar_req_t;
 
-// copy request
-typedef struct kc_copy_req {
+// charactor pointer type parameter common request
+typedef struct kc_char_cmn_req_t {
   KC_REQ_FIELD
-  char *path;
-} kc_copy_req, kc_path_req_t;
+  char *str;
+} kc_char_cmn_req_t;
 
 // merge request
-typedef struct kc_merge_req {
+typedef struct kc_merge_req_t {
   KC_REQ_FIELD
   kc::BasicDB **srcary;
   int32_t srcnum;
   uint32_t mode;
-} kc_merge_req;
+} kc_merge_req_t;
 
 
 StringVector* Array2Vector(const Local<Value> obj) {
@@ -600,33 +647,33 @@ Handle<Value> PolyDBWrap::Remove(const Arguments &args) {
     return args.This();
   }
 
-  kc_remove_req_t *remove_req = (kc_remove_req_t *)malloc(sizeof(kc_remove_req_t));
-  remove_req->type = KC_REMOVE;
-  remove_req->result = PolyDB::Error::SUCCESS;
-  remove_req->wrapdb = obj;
-  remove_req->cb.Clear();
-  remove_req->key = NULL;
+  kc_char_cmn_req_t *req = (kc_char_cmn_req_t *)malloc(sizeof(kc_char_cmn_req_t));
+  req->type = KC_REMOVE;
+  req->result = PolyDB::Error::SUCCESS;
+  req->wrapdb = obj;
+  req->cb.Clear();
+  req->str = NULL;
 
   if (args.Length() == 1) {
     if (args[0]->IsFunction()) {
-      remove_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
     } else if (args[0]->IsObject()) {
       assert(args[0]->IsObject());
       if (args[0]->ToObject()->Has(key_sym)) {
         String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
-        remove_req->key = kc::strdup(*key);
+        req->str = kc::strdup(*key);
       }
     }
   } else {
     if (args[0]->ToObject()->Has(key_sym)) {
       String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
-      remove_req->key = kc::strdup(*key);
+      req->str = kc::strdup(*key);
     }
-    remove_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
   uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = remove_req;
+  uv_req->data = req;
 
   int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
   TRACE("uv_queue_work: ret=%d\n", ret);
@@ -895,7 +942,7 @@ Handle<Value> PolyDBWrap::Check(const Arguments &args) {
     return args.This();
   }
 
-  kc_check_req *check_req = (kc_check_req *)malloc(sizeof(kc_check_req));
+  kc_check_req_t *check_req = (kc_check_req_t *)malloc(sizeof(kc_check_req_t));
   check_req->type = KC_CHECK;
   check_req->result = PolyDB::Error::SUCCESS;
   check_req->wrapdb = obj;
@@ -951,7 +998,7 @@ Handle<Value> PolyDBWrap::GetBulk(const Arguments &args) {
     return args.This();
   }
 
-  kc_get_bulk_req *req = (kc_get_bulk_req *)malloc(sizeof(kc_get_bulk_req));
+  kc_get_bulk_req_t *req = (kc_get_bulk_req_t *)malloc(sizeof(kc_get_bulk_req_t));
   req->type = KC_GET_BULK;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1011,7 +1058,7 @@ Handle<Value> PolyDBWrap::SetBulk(const Arguments &args) {
     return args.This();
   }
 
-  kc_set_bulk_req *req = (kc_set_bulk_req *)malloc(sizeof(kc_set_bulk_req));
+  kc_set_bulk_req_t *req = (kc_set_bulk_req_t *)malloc(sizeof(kc_set_bulk_req_t));
   req->type = KC_SET_BULK;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1071,7 +1118,7 @@ Handle<Value> PolyDBWrap::RemoveBulk(const Arguments &args) {
     return args.This();
   }
 
-  kc_remove_bulk_req *req = (kc_remove_bulk_req *)malloc(sizeof(kc_remove_bulk_req));
+  kc_remove_bulk_req_t *req = (kc_remove_bulk_req_t *)malloc(sizeof(kc_remove_bulk_req_t));
   req->type = KC_REMOVE_BULK;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1131,12 +1178,12 @@ Handle<Value> PolyDBWrap::MatchPrefix(const Arguments &args) {
     return args.This();
   }
 
-  kc_match_prefix_req *req = (kc_match_prefix_req *)malloc(sizeof(kc_match_prefix_req));
+  kc_match_cmn_req_t *req = (kc_match_cmn_req_t *)malloc(sizeof(kc_match_cmn_req_t));
   req->type = KC_MATCH_PREFIX;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
   req->cb.Clear();
-  req->prefix = NULL;
+  req->str = NULL;
   req->max = -1;
   req->keys = NULL;
 
@@ -1146,7 +1193,7 @@ Handle<Value> PolyDBWrap::MatchPrefix(const Arguments &args) {
     } else if (args[0]->IsObject()) {
       if (args[0]->ToObject()->Has(prefix_sym)) {
         String::Utf8Value prefix(args[0]->ToObject()->Get(prefix_sym));
-        req->prefix = kc::strdup(*prefix);
+        req->str = kc::strdup(*prefix);
       }
       if (args[0]->ToObject()->Has(max_sym)) {
         req->max = args[0]->ToObject()->Get(max_sym)->NumberValue();
@@ -1155,7 +1202,7 @@ Handle<Value> PolyDBWrap::MatchPrefix(const Arguments &args) {
   } else {
     if (args[0]->ToObject()->Has(prefix_sym)) {
       String::Utf8Value prefix(args[0]->ToObject()->Get(prefix_sym));
-      req->prefix = kc::strdup(*prefix);
+      req->str = kc::strdup(*prefix);
     }
     if (args[0]->ToObject()->Has(max_sym)) {
       req->max = args[0]->ToObject()->Get(max_sym)->NumberValue();
@@ -1193,12 +1240,12 @@ Handle<Value> PolyDBWrap::MatchRegex(const Arguments &args) {
     return args.This();
   }
 
-  kc_match_regex_req *req = (kc_match_regex_req *)malloc(sizeof(kc_match_regex_req));
+  kc_match_cmn_req_t *req = (kc_match_cmn_req_t *)malloc(sizeof(kc_match_cmn_req_t));
   req->type = KC_MATCH_REGEX;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
   req->cb.Clear();
-  req->regex = NULL;
+  req->str = NULL;
   req->max = -1;
   req->keys = NULL;
 
@@ -1208,7 +1255,7 @@ Handle<Value> PolyDBWrap::MatchRegex(const Arguments &args) {
     } else if (args[0]->IsObject()) {
       if (args[0]->ToObject()->Has(regex_sym)) {
         String::Utf8Value regex(Local<RegExp>::Cast(args[0]->ToObject()->Get(regex_sym))->GetSource());
-        req->regex = kc::strdup(*regex);
+        req->str = kc::strdup(*regex);
       }
       if (args[0]->ToObject()->Has(max_sym)) {
         req->max = args[0]->ToObject()->Get(max_sym)->NumberValue();
@@ -1217,7 +1264,7 @@ Handle<Value> PolyDBWrap::MatchRegex(const Arguments &args) {
   } else {
     if (args[0]->ToObject()->Has(regex_sym)) {
       String::Utf8Value regex(Local<RegExp>::Cast(args[0]->ToObject()->Get(regex_sym))->GetSource());
-      req->regex = kc::strdup(*regex);
+      req->str = kc::strdup(*regex);
     }
     if (args[0]->ToObject()->Has(max_sym)) {
       req->max = args[0]->ToObject()->Get(max_sym)->NumberValue();
@@ -1261,12 +1308,12 @@ Handle<Value> PolyDBWrap::MatchSimilar(const Arguments &args) {
     return args.This();
   }
 
-  kc_match_similar_req *req = (kc_match_similar_req *)malloc(sizeof(kc_match_similar_req));
+  kc_match_similar_req_t *req = (kc_match_similar_req_t *)malloc(sizeof(kc_match_similar_req_t));
   req->type = KC_MATCH_SIMILAR;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
   req->cb.Clear();
-  req->origin = NULL;
+  req->str = NULL;
   req->max = -1;
   req->utf = false;
   req->range = 1;
@@ -1278,7 +1325,7 @@ Handle<Value> PolyDBWrap::MatchSimilar(const Arguments &args) {
     } else if (args[0]->IsObject()) {
       if (args[0]->ToObject()->Has(origin_sym)) {
         String::Utf8Value origin(args[0]->ToObject()->Get(origin_sym));
-        req->origin = kc::strdup(*origin);
+        req->str = kc::strdup(*origin);
       }
       if (args[0]->ToObject()->Has(max_sym)) {
         req->max = args[0]->ToObject()->Get(max_sym)->NumberValue();
@@ -1293,7 +1340,7 @@ Handle<Value> PolyDBWrap::MatchSimilar(const Arguments &args) {
   } else {
     if (args[0]->ToObject()->Has(origin_sym)) {
       String::Utf8Value origin(args[0]->ToObject()->Get(origin_sym));
-      req->origin = kc::strdup(*origin);
+      req->str = kc::strdup(*origin);
     }
     if (args[0]->ToObject()->Has(max_sym)) {
       req->max = args[0]->ToObject()->Get(max_sym)->NumberValue();
@@ -1317,49 +1364,7 @@ Handle<Value> PolyDBWrap::MatchSimilar(const Arguments &args) {
   return args.This();
 }
 
-Handle<Value> PolyDBWrap::Copy(const Arguments &args) {
-  TRACE("Copy\n");
-  HandleScope scope;
-
-  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
-  assert(obj != NULL);
-
-  Local<String> key_sym = String::NewSymbol("path");
-  if ( (args.Length() == 0) ||
-       (args.Length() == 1 && (!args[0]->IsString()) | !args[0]->IsFunction()) ) {
-    ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
-  }
-
-  kc_copy_req *req = (kc_copy_req *)malloc(sizeof(kc_copy_req));
-  req->type = KC_COPY;
-  req->result = PolyDB::Error::SUCCESS;
-  req->wrapdb = obj;
-  req->cb.Clear();
-  req->path = NULL;
-
-  if (args.Length() == 1) {
-    if (args[0]->IsFunction()) {
-      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
-    } else if (args[0]->IsString()) {
-      String::Utf8Value path(args[0]->ToString());
-      req->path = kc::strdup(*path);
-    }
-  } else {
-    String::Utf8Value path(args[0]->ToString());
-    req->path = kc::strdup(*path);
-    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
-  }
-  
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
-
-  obj->Ref();
-  return args.This();
-}
+DEFINE_CHAR_PARAM_FUNC(Copy, KC_COPY);
 
 Handle<Value> PolyDBWrap::Merge(const Arguments &args) {
   TRACE("Merge\n");
@@ -1381,7 +1386,7 @@ Handle<Value> PolyDBWrap::Merge(const Arguments &args) {
     return args.This();
   }
 
-  kc_merge_req *req = (kc_merge_req *)malloc(sizeof(kc_merge_req));
+  kc_merge_req_t *req = (kc_merge_req_t *)malloc(sizeof(kc_merge_req_t));
   req->type = KC_MERGE;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1438,93 +1443,8 @@ Handle<Value> PolyDBWrap::Merge(const Arguments &args) {
   return args.This();
 }
 
-Handle<Value> PolyDBWrap::DumpSnapshot(const Arguments &args) {
-  TRACE("DumpSnapshot\n");
-  HandleScope scope;
-
-  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
-  assert(obj != NULL);
-
-  Local<String> key_sym = String::NewSymbol("path");
-  if ( (args.Length() == 0) ||
-       (args.Length() == 1 && (!args[0]->IsString()) | !args[0]->IsFunction()) ) {
-    ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
-  }
-
-  kc_path_req_t *req = (kc_path_req_t *)malloc(sizeof(kc_path_req_t));
-  req->type = KC_DUMP_SNAPSHOT;
-  req->result = PolyDB::Error::SUCCESS;
-  req->wrapdb = obj;
-  req->cb.Clear();
-  req->path = NULL;
-
-  if (args.Length() == 1) {
-    if (args[0]->IsFunction()) {
-      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
-    } else if (args[0]->IsString()) {
-      String::Utf8Value path(args[0]->ToString());
-      req->path = kc::strdup(*path);
-    }
-  } else {
-    String::Utf8Value path(args[0]->ToString());
-    req->path = kc::strdup(*path);
-    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
-  }
-  
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
-
-  obj->Ref();
-  return args.This();
-}
-
-Handle<Value> PolyDBWrap::LoadSnapshot(const Arguments &args) {
-  TRACE("LoadSnapshot\n");
-  HandleScope scope;
-
-  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
-  assert(obj != NULL);
-
-  Local<String> key_sym = String::NewSymbol("path");
-  if ( (args.Length() == 0) ||
-       (args.Length() == 1 && (!args[0]->IsString()) | !args[0]->IsFunction()) ) {
-    ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
-  }
-
-  kc_path_req_t *req = (kc_path_req_t *)malloc(sizeof(kc_path_req_t));
-  req->type = KC_LOAD_SNAPSHOT;
-  req->result = PolyDB::Error::SUCCESS;
-  req->wrapdb = obj;
-  req->cb.Clear();
-  req->path = NULL;
-
-  if (args.Length() == 1) {
-    if (args[0]->IsFunction()) {
-      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
-    } else if (args[0]->IsString()) {
-      String::Utf8Value path(args[0]->ToString());
-      req->path = kc::strdup(*path);
-    }
-  } else {
-    String::Utf8Value path(args[0]->ToString());
-    req->path = kc::strdup(*path);
-    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
-  }
-  
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
-
-  obj->Ref();
-  return args.This();
-}
+DEFINE_CHAR_PARAM_FUNC(DumpSnapshot, KC_DUMP_SNAPSHOT);
+DEFINE_CHAR_PARAM_FUNC(LoadSnapshot, KC_LOAD_SNAPSHOT);
 
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
@@ -1563,12 +1483,12 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       { DO_KV_EXECUTE(append, work_req); break; }
     case KC_REMOVE:
       {
-        kc_remove_req_t *remove_req = static_cast<kc_remove_req_t *>(work_req->data);
-        TRACE("remove: key = %s\n", remove_req->key);
-        if (remove_req->key == NULL) {
+        kc_char_cmn_req_t *remove_req = static_cast<kc_char_cmn_req_t*>(work_req->data);
+        TRACE("remove: key = %s\n", remove_req->str);
+        if (remove_req->str == NULL) {
           req->result = PolyDB::Error::INVALID;
         } else {
-          if (!db->remove(remove_req->key, strlen(remove_req->key))) {
+          if (!db->remove(remove_req->str, strlen(remove_req->str))) {
             req->result = db->error().code();
           }
         }
@@ -1642,7 +1562,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_CHECK:
       {
-        kc_check_req *check_req = static_cast<kc_check_req*>(work_req->data);
+        kc_check_req_t *check_req = static_cast<kc_check_req_t*>(work_req->data);
         if (check_req->key == NULL) {
           check_req->result = PolyDB::Error::INVALID;
         } else {
@@ -1655,7 +1575,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_GET_BULK:
       {
-        kc_get_bulk_req *gb_req = static_cast<kc_get_bulk_req*>(work_req->data);
+        kc_get_bulk_req_t *gb_req = static_cast<kc_get_bulk_req_t*>(work_req->data);
         if (gb_req->keys == NULL) {
           gb_req->result = PolyDB::Error::INVALID;
         } else {
@@ -1670,7 +1590,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_SET_BULK:
       {
-        kc_set_bulk_req *sb_req = static_cast<kc_set_bulk_req*>(work_req->data);
+        kc_set_bulk_req_t *sb_req = static_cast<kc_set_bulk_req_t*>(work_req->data);
         if (sb_req->recs == NULL) {
           sb_req->result = PolyDB::Error::INVALID;
         } else {
@@ -1685,7 +1605,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_REMOVE_BULK:
       {
-        kc_remove_bulk_req *rb_req = static_cast<kc_remove_bulk_req*>(work_req->data);
+        kc_remove_bulk_req_t *rb_req = static_cast<kc_remove_bulk_req_t*>(work_req->data);
         if (rb_req->keys == NULL) {
           rb_req->result = PolyDB::Error::INVALID;
         } else {
@@ -1699,67 +1619,29 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
         break;
       }
     case KC_MATCH_PREFIX:
-      {
-        kc_match_prefix_req *mp_req = static_cast<kc_match_prefix_req*>(work_req->data);
-        if (mp_req->prefix == NULL) {
-          mp_req->result = PolyDB::Error::INVALID;
-        } else {
-          mp_req->keys = new StringVector();
-          int64_t num = db->match_prefix(std::string(mp_req->prefix, strlen(mp_req->prefix)), mp_req->keys, mp_req->max);
-          if (num <= 0) {
-            mp_req->result = db->error().code();
-          }
-          TRACE("match_prefix: ret = %ld\n", num);
-        }
-        break;
-      }
+      { DO_MATCH_CMN_EXECUTE(match_prefix, work_req); break; }
     case KC_MATCH_REGEX:
-      {
-        kc_match_regex_req *mr_req = static_cast<kc_match_regex_req *>(work_req->data);
-        if (mr_req->regex == NULL) {
-          mr_req->result = PolyDB::Error::INVALID;
-        } else {
-          mr_req->keys = new StringVector();
-          TRACE("match_regex: regex = %s, max = %ld\n", mr_req->regex, mr_req->max);
-          int64_t num = db->match_regex(std::string(mr_req->regex, strlen(mr_req->regex)), mr_req->keys, mr_req->max);
-          TRACE("match_regex: ret = %ld\n", num);
-          if (num <= 0) {
-            mr_req->result = db->error().code();
-          }
-        }
-        break;
-      }
+      { DO_MATCH_CMN_EXECUTE(match_regex, work_req); break; }
     case KC_MATCH_SIMILAR:
       {
-        kc_match_similar_req *ms_req = static_cast<kc_match_similar_req*>(work_req->data);
-        if (ms_req->origin == NULL) {
+        kc_match_similar_req_t *ms_req = static_cast<kc_match_similar_req_t*>(work_req->data);
+        if (ms_req->str == NULL) {
           ms_req->result = PolyDB::Error::INVALID;
         } else {
           ms_req->keys = new StringVector();
-          int64_t num = db->match_similar(std::string(ms_req->origin, strlen(ms_req->origin)), ms_req->range, ms_req->utf, ms_req->keys, ms_req->max);
+          int64_t num = db->match_similar(std::string(ms_req->str, strlen(ms_req->str)), ms_req->range, ms_req->utf, ms_req->keys, ms_req->max);
+          TRACE("match_similar: ret = %ld\n", num);
           if (num <= 0) {
             ms_req->result = db->error().code();
           }
-          TRACE("match_similar: ret = %ld\n", num);
         }
         break;
       }
     case KC_COPY:
-      {
-        kc_copy_req *copy_req = static_cast<kc_copy_req*>(work_req->data);
-        TRACE("copy: path = %s\n", copy_req->path);
-        if (copy_req->path == NULL) {
-          req->result = PolyDB::Error::INVALID;
-        } else {
-          if (!db->copy(copy_req->path)) {
-            req->result = db->error().code();
-          }
-        }
-        break;
-      }
+      { DO_CHAR_PARAM_CMN_EXECUTE(copy, work_req); break; }
     case KC_MERGE:
       {
-        kc_merge_req *merge_req = static_cast<kc_merge_req*>(work_req->data);
+        kc_merge_req_t *merge_req = static_cast<kc_merge_req_t*>(work_req->data);
         TRACE("merge: srcary = %p, srcnum = %d, mode = %d\n", merge_req->srcary, merge_req->srcnum, merge_req->mode);
         if (merge_req->srcary == NULL || merge_req->srcnum == -1 ||
             !(merge_req->mode == PolyDB::MSET || 
@@ -1774,31 +1656,9 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
         break;
       }
     case KC_DUMP_SNAPSHOT:
-      {
-        kc_path_req_t *path_req = static_cast<kc_path_req_t*>(work_req->data);
-        TRACE("dump_snapshot: path = %s\n", path_req->path);
-        if (path_req->path == NULL) {
-          req->result = PolyDB::Error::INVALID;
-        } else {
-          if (!db->dump_snapshot(path_req->path)) {
-            req->result = db->error().code();
-          }
-        }
-        break;
-      }
+      { DO_CHAR_PARAM_CMN_EXECUTE(dump_snapshot, work_req); break; }
     case KC_LOAD_SNAPSHOT:
-      {
-        kc_path_req_t *path_req = static_cast<kc_path_req_t*>(work_req->data);
-        TRACE("load_snapshot: path = %s\n", path_req->path);
-        if (path_req->path == NULL) {
-          req->result = PolyDB::Error::INVALID;
-        } else {
-          if (!db->load_snapshot(path_req->path)) {
-            req->result = db->error().code();
-          }
-        }
-        break;
-      }
+      { DO_CHAR_PARAM_CMN_EXECUTE(load_snapshot, work_req); break; }
     default:
       assert(0);
   }
@@ -1886,50 +1746,43 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       }
     case KC_CHECK:
       {
-        kc_check_req *check_req = static_cast<kc_check_req*>(work_req->data);
+        kc_check_req_t *check_req = static_cast<kc_check_req_t*>(work_req->data);
         argv[argc++] = Number::New(check_req->ret);
         break;
       }
     case KC_GET_BULK:
       {
         if (req->result == PolyDB::Error::SUCCESS) {
-          kc_get_bulk_req *gb_req = static_cast<kc_get_bulk_req*>(work_req->data);
+          kc_get_bulk_req_t *gb_req = static_cast<kc_get_bulk_req_t*>(work_req->data);
           argv[argc++] = Map2Obj(gb_req->recs);
         }
         break;
       }
     case KC_SET_BULK:
       {
-        kc_set_bulk_req *sb_req = static_cast<kc_set_bulk_req*>(work_req->data);
+        kc_set_bulk_req_t *sb_req = static_cast<kc_set_bulk_req_t*>(work_req->data);
         argv[argc++] = Number::New(sb_req->num);
         break;
       }
     case KC_REMOVE_BULK:
       {
-        kc_remove_bulk_req *rb_req = static_cast<kc_remove_bulk_req*>(work_req->data);
+        kc_remove_bulk_req_t *rb_req = static_cast<kc_remove_bulk_req_t*>(work_req->data);
         argv[argc++] = Number::New(rb_req->num);
         break;
       }
     case KC_MATCH_PREFIX:
-      {
-        if (req->result == PolyDB::Error::SUCCESS) {
-          kc_match_prefix_req *mp_req = static_cast<kc_match_prefix_req*>(work_req->data);
-          argv[argc++] = Vector2Array(mp_req->keys);
-        }
-        break;
-      }
     case KC_MATCH_REGEX:
       {
         if (req->result == PolyDB::Error::SUCCESS) {
-          kc_match_regex_req *mr_req = static_cast<kc_match_regex_req*>(work_req->data);
-          argv[argc++] = Vector2Array(mr_req->keys);
+          kc_match_cmn_req_t *m_req = static_cast<kc_match_cmn_req_t*>(work_req->data);
+          argv[argc++] = Vector2Array(m_req->keys);
         }
         break;
       }
     case KC_MATCH_SIMILAR:
       {
         if (req->result == PolyDB::Error::SUCCESS) {
-          kc_match_similar_req *ms_req = static_cast<kc_match_similar_req*>(work_req->data);
+          kc_match_similar_req_t *ms_req = static_cast<kc_match_similar_req_t*>(work_req->data);
           argv[argc++] = Vector2Array(ms_req->keys);
         }
         break;
@@ -1959,10 +1812,8 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
   switch (req->type) {
     case KC_OPEN:
       {
-        kc_open_req_t *open_req = static_cast<kc_open_req_t *>(work_req->data);
-        assert(open_req->path != NULL);
-        free(open_req->path);
-        open_req->path = NULL;
+        kc_open_req_t *open_req = static_cast<kc_open_req_t*>(work_req->data);
+        SAFE_REQ_ATTR_FREE(open_req, path);
         free(open_req);
         break;
       }
@@ -1970,16 +1821,16 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_CLEAR:
     case KC_COUNT:
     case KC_SIZE:
-      free(req);
-      break;
+      {
+        kc_req_t *base_req = static_cast<kc_req_t*>(work_req->data);
+        free(base_req);
+        break;
+      }
     case KC_STATUS:
       {
         kc_strmap_ret_req_t *strmap_ret_req = static_cast<kc_strmap_ret_req_t*>(work_req->data);
-        if (strmap_ret_req->ret) {
-          delete strmap_ret_req->ret;
-          strmap_ret_req->ret = NULL;
-        }
-        free(req);
+        SAFE_REQ_ATTR_DELETE(strmap_ret_req, ret);
+        free(strmap_ret_req);
         break;
       }
     case KC_SET:
@@ -1988,138 +1839,100 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_APPEND:
     case KC_REPLACE:
     case KC_SEIZE:
-      { KV_FREE(work_req); break; }
-    case KC_REMOVE:
-      { K_FREE(work_req, kc_remove_req_t); break; }
+      {
+        kc_kv_req_t *kv_req = static_cast<kc_kv_req_t*>(work_req->data);
+        SAFE_REQ_ATTR_FREE(kv_req, key);
+        SAFE_REQ_ATTR_FREE(kv_req, value);
+        free(kv_req);
+        break;
+      }
     case KC_INCREMENT:
-      { K_FREE(work_req, kc_increment_req_t); break; }
+      { 
+        kc_increment_req_t *inc_req = static_cast<kc_increment_req_t*>(work_req->data);
+        SAFE_REQ_ATTR_FREE(inc_req, key);
+        free(inc_req);
+        break;
+      }
     case KC_INCREMENT_DOUBLE:
-      { K_FREE(work_req, kc_increment_double_req_t); break; }
+      { 
+        kc_increment_double_req_t *inc_dbl_req = static_cast<kc_increment_double_req_t*>(work_req->data);
+        SAFE_REQ_ATTR_FREE(inc_dbl_req, key);
+        free(inc_dbl_req);
+        break;
+      }
     case KC_CAS:
       {
         kc_cas_req_t *cas_req = static_cast<kc_cas_req_t *>(work_req->data);
-        if (cas_req->key) {
-          free(cas_req->key);
-          cas_req->key = NULL;
-        }
-        if (cas_req->oval) {
-          free(cas_req->oval);
-          cas_req->oval = NULL;
-        }
-        if (cas_req->nval) {
-          free(cas_req->nval);
-          cas_req->nval = NULL;
-        }
-        free(req);
+        SAFE_REQ_ATTR_FREE(cas_req, key);
+        SAFE_REQ_ATTR_FREE(cas_req, oval);
+        SAFE_REQ_ATTR_FREE(cas_req, nval);
+        free(cas_req);
         break;
       }
     case KC_CHECK:
-      { K_FREE(work_req, kc_check_req); break; }
+      { 
+        kc_check_req_t *check_req = static_cast<kc_check_req_t*>(work_req->data);
+        SAFE_REQ_ATTR_FREE(check_req, key);
+        free(check_req);
+        break;
+      }
     case KC_GET_BULK:
       {
-        kc_get_bulk_req *gb_req = static_cast<kc_get_bulk_req*>(work_req->data);
-        if (gb_req->keys) {
-          delete gb_req->keys;
-          gb_req->keys = NULL;
-        }
-        if (gb_req->recs) {
-          delete gb_req->recs;
-          gb_req->recs = NULL;
-        }
-        free(req);
+        kc_get_bulk_req_t *gb_req = static_cast<kc_get_bulk_req_t*>(work_req->data);
+        SAFE_REQ_ATTR_DELETE(gb_req, keys);
+        SAFE_REQ_ATTR_DELETE(gb_req, recs);
+        free(gb_req);
         break;
       }
     case KC_SET_BULK:
       {
-        kc_set_bulk_req *sb_req = static_cast<kc_set_bulk_req*>(work_req->data);
-        if (sb_req->recs) {
-          delete sb_req->recs;
-          sb_req->recs = NULL;
-        }
-        free(req);
+        kc_set_bulk_req_t *sb_req = static_cast<kc_set_bulk_req_t*>(work_req->data);
+        SAFE_REQ_ATTR_DELETE(sb_req, recs);
+        free(sb_req);
         break;
       }
     case KC_REMOVE_BULK:
       {
-        kc_remove_bulk_req *rb_req = static_cast<kc_remove_bulk_req*>(work_req->data);
-        if (rb_req->keys) {
-          delete rb_req->keys;
-          rb_req->keys = NULL;
-        }
-        free(req);
+        kc_remove_bulk_req_t *rb_req = static_cast<kc_remove_bulk_req_t*>(work_req->data);
+        SAFE_REQ_ATTR_DELETE(rb_req, keys);
+        free(rb_req);
         break;
       }
     case KC_MATCH_PREFIX:
-      {
-        kc_match_prefix_req *mp_req = static_cast<kc_match_prefix_req*>(work_req->data);
-        if (mp_req->prefix) {
-          free(mp_req->prefix);
-          mp_req->prefix = NULL;
-        }
-        if (mp_req->keys) {
-          delete mp_req->keys;
-          mp_req->keys = NULL;
-        }
-        free(req);
-        break;
-      }
     case KC_MATCH_REGEX:
       {
-        kc_match_regex_req *mr_req = static_cast<kc_match_regex_req*>(work_req->data);
-        if (mr_req->regex) {
-          free(mr_req->regex);
-          mr_req->regex = NULL;
-        }
-        if (mr_req->keys) {
-          delete mr_req->keys;
-          mr_req->keys = NULL;
-        }
-        free(req);
+        kc_match_cmn_req_t *m_req = static_cast<kc_match_cmn_req_t*>(work_req->data);
+        SAFE_REQ_ATTR_FREE(m_req, str);
+        SAFE_REQ_ATTR_DELETE(m_req, keys);
+        free(m_req);
         break;
       }
     case KC_MATCH_SIMILAR:
       {
-        kc_match_similar_req *ms_req = static_cast<kc_match_similar_req*>(work_req->data);
-        if (ms_req->origin) {
-          free(ms_req->origin);
-          ms_req->origin = NULL;
-        }
-        if (ms_req->keys) {
-          delete ms_req->keys;
-          ms_req->keys = NULL;
-        }
-        free(req);
-        break;
-      }
-    case KC_COPY:
-      {
-        kc_copy_req *copy_req = static_cast<kc_copy_req*>(work_req->data);
-        if (copy_req->path) {
-          free(copy_req->path);
-          copy_req->path = NULL;
-        }
-        free(req);
+        kc_match_similar_req_t *ms_req = static_cast<kc_match_similar_req_t*>(work_req->data);
+        SAFE_REQ_ATTR_FREE(ms_req, str);
+        SAFE_REQ_ATTR_DELETE(ms_req, keys);
+        free(ms_req);
         break;
       }
     case KC_MERGE:
       {
-        kc_merge_req *merge_req = static_cast<kc_merge_req*>(work_req->data);
+        kc_merge_req_t *merge_req = static_cast<kc_merge_req_t*>(work_req->data);
         if (merge_req->srcary) {
           delete[] merge_req->srcary;
           merge_req->srcary = NULL;
         }
-        free(req);
+        free(merge_req);
         break;
       }
+    case KC_REMOVE:
+    case KC_COPY:
     case KC_DUMP_SNAPSHOT:
     case KC_LOAD_SNAPSHOT:
       {
-        kc_path_req_t *path_req = static_cast<kc_path_req_t*>(work_req->data);
-        if (path_req->path) {
-          free(path_req->path);
-          path_req->path = NULL;
-        }
-        free(req);
+        kc_char_cmn_req_t *path_req = static_cast<kc_char_cmn_req_t*>(work_req->data);
+        SAFE_REQ_ATTR_FREE(path_req, str);
+        free(path_req);
         break;
       }
     default:
