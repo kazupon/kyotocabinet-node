@@ -3074,6 +3074,266 @@ describe('DB class tests', function () {
     });
 
 
+    // 
+    // dump_snapshot
+    //
+    describe('db not open', function () {
+      it('should be `INVALID` error', function (done) {
+        var mdb = new DB();
+        mdb.dump_snapshot('dump_snapshot.snp', function (err) {
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var mdb;
+      var fname = 'dump_snapshot.kct';
+      before(function (done) {
+        mdb = new DB();
+        mdb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        mdb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function (err) {
+            done();
+          });
+        });
+      });
+      describe('call `dump_snapshot` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.dump_snapshot();
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific type not string', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.dump_snapshot(1);
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+      });
+      describe('with specific file path`', function () {
+        var dest = 'dump_snapshot.snp';
+        before(function (done) {
+          mdb.clear(function (err) {
+            if (err) { return done(err); }
+            mdb.set({ key: 'hello', value: 'world' }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        after(function (done) {
+          fs.unlink(dest, function (err) {
+            if (err) { console.error(err); }
+            done();
+          });
+        });
+        it('should be dump snapshot', function (done) {
+          mdb.dump_snapshot(dest, function (err) {
+            if (err) { return done(err); }
+            mdb.clear(function (err) {
+              if (err) { return done(err); }
+              mdb.count(function (err, cnt) {
+                if (err) { return done(err); }
+                cnt.should.eql(0);
+                mdb.load_snapshot(dest, function (err) {
+                  if (err) { return done(err); }
+                  mdb.get({ key: 'hello' }, function (err, value) {
+                    if (err) { return done(err); }
+                    value.should.eql('world');
+                    done();
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+      describe('with specific already file path`', function () {
+        var dest = 'dump_snapshot.snp';
+        before(function (done) {
+          mdb.clear(function (err) {
+            if (err) { return done(err); }
+            mdb.set({ key: 'hello', value: 'world' }, function (err) {
+              if (err) { return done(err); }
+              mdb.dump_snapshot(dest, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+          });
+        });
+        after(function (done) {
+          fs.unlink(dest, function (err) {
+            if (err) { console.error(err); }
+            done();
+          });
+        });
+        it('should be dump snapshot', function (done) {
+          mdb.dump_snapshot(dest, function (err) {
+            if (err) { return done(err); }
+            mdb.clear(function (err) {
+              if (err) { return done(err); }
+              mdb.count(function (err, cnt) {
+                if (err) { return done(err); }
+                cnt.should.eql(0);
+                mdb.load_snapshot(dest, function (err) {
+                  if (err) { return done(err); }
+                  mdb.get({ key: 'hello' }, function (err, value) {
+                    if (err) { return done(err); }
+                    value.should.eql('world');
+                    done();
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+      describe('with specific no permission file path`', function () {
+        var dest = '/dump_snapshot.snp';
+        before(function (done) {
+          mdb.clear(function (err) {
+            if (err) { return done(err); }
+            mdb.set({ key: 'hello', value: 'world' }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        it('should be `NOREPOS` error', function (done) {
+          mdb.dump_snapshot(dest, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREPOS);
+            done();
+          });
+        });
+      });
+    });
+
+
+    // 
+    // load_snapshot
+    //
+    describe('db not open', function () {
+      it('should be `NOREPOS` error', function (done) {
+        var mdb = new DB();
+        mdb.load_snapshot('load_snapshot.snp', function (err) {
+          err.should.have.property('code');
+          err.code.should.eql(Error.NOREPOS);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var mdb;
+      var fname = 'load_snapshot.kct';
+      before(function (done) {
+        mdb = new DB();
+        mdb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        mdb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function (err) {
+            done();
+          });
+        });
+      });
+      describe('call `load_snapshot` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.load_snapshot();
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific type not string', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              mdb.load_snapshot(1);
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+      });
+      describe('with specific file path`', function () {
+        var dest = 'load_snapshot.snp';
+        before(function (done) {
+          mdb.clear(function (err) {
+            if (err) { return done(err); }
+            mdb.set({ key: 'hello', value: 'world' }, function (err) {
+              if (err) { return done(err); }
+              mdb.dump_snapshot(dest, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+          });
+        });
+        after(function (done) {
+          fs.unlink(dest, function (err) {
+            if (err) { console.error(err); }
+            done();
+          });
+        });
+        it('should be dump snapshot', function (done) {
+          mdb.load_snapshot(dest, function (err) {
+            if (err) { return done(err); }
+            mdb.get({ key: 'hello' }, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql('world');
+              done();
+            });
+          });
+        });
+      });
+      describe('with specific nothing file path`', function () {
+        var dest = 'load_snapshot.snp';
+        it('should be `NOREPOS` error', function (done) {
+          mdb.load_snapshot(dest, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREPOS);
+            done();
+          });
+        });
+      });
+      describe('with specific no permission file path`', function () {
+        var dest = '/load_snapshot.snp';
+        it('should be `NOREPOS` error', function (done) {
+          mdb.dump_snapshot(dest, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREPOS);
+            done();
+          });
+        });
+      });
+    });
+
 
   });
 });

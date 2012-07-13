@@ -306,6 +306,8 @@ enum kc_req_type {
   KC_MATCH_SIMILAR,
   KC_COPY,
   KC_MERGE,
+  KC_DUMP_SNAPSHOT,
+  KC_LOAD_SNAPSHOT,
 };
 
 // common request field
@@ -440,7 +442,7 @@ typedef struct kc_match_similar_req {
 typedef struct kc_copy_req {
   KC_REQ_FIELD
   char *path;
-} kc_copy_req;
+} kc_copy_req, kc_path_req_t;
 
 // merge request
 typedef struct kc_merge_req {
@@ -1436,6 +1438,94 @@ Handle<Value> PolyDBWrap::Merge(const Arguments &args) {
   return args.This();
 }
 
+Handle<Value> PolyDBWrap::DumpSnapshot(const Arguments &args) {
+  TRACE("DumpSnapshot\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> key_sym = String::NewSymbol("path");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsString()) | !args[0]->IsFunction()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_path_req_t *req = (kc_path_req_t *)malloc(sizeof(kc_path_req_t));
+  req->type = KC_DUMP_SNAPSHOT;
+  req->result = PolyDB::Error::SUCCESS;
+  req->wrapdb = obj;
+  req->cb.Clear();
+  req->path = NULL;
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsString()) {
+      String::Utf8Value path(args[0]->ToString());
+      req->path = kc::strdup(*path);
+    }
+  } else {
+    String::Utf8Value path(args[0]->ToString());
+    req->path = kc::strdup(*path);
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+  
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return args.This();
+}
+
+Handle<Value> PolyDBWrap::LoadSnapshot(const Arguments &args) {
+  TRACE("LoadSnapshot\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> key_sym = String::NewSymbol("path");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsString()) | !args[0]->IsFunction()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_path_req_t *req = (kc_path_req_t *)malloc(sizeof(kc_path_req_t));
+  req->type = KC_LOAD_SNAPSHOT;
+  req->result = PolyDB::Error::SUCCESS;
+  req->wrapdb = obj;
+  req->cb.Clear();
+  req->path = NULL;
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsString()) {
+      String::Utf8Value path(args[0]->ToString());
+      req->path = kc::strdup(*path);
+    }
+  } else {
+    String::Utf8Value path(args[0]->ToString());
+    req->path = kc::strdup(*path);
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+  
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return args.This();
+}
+
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -1678,6 +1768,32 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
           req->result = PolyDB::Error::INVALID;
         } else {
           if (!db->merge(merge_req->srcary, merge_req->srcnum, (PolyDB::MergeMode)merge_req->mode)) {
+            req->result = db->error().code();
+          }
+        }
+        break;
+      }
+    case KC_DUMP_SNAPSHOT:
+      {
+        kc_path_req_t *path_req = static_cast<kc_path_req_t*>(work_req->data);
+        TRACE("dump_snapshot: path = %s\n", path_req->path);
+        if (path_req->path == NULL) {
+          req->result = PolyDB::Error::INVALID;
+        } else {
+          if (!db->dump_snapshot(path_req->path)) {
+            req->result = db->error().code();
+          }
+        }
+        break;
+      }
+    case KC_LOAD_SNAPSHOT:
+      {
+        kc_path_req_t *path_req = static_cast<kc_path_req_t*>(work_req->data);
+        TRACE("load_snapshot: path = %s\n", path_req->path);
+        if (path_req->path == NULL) {
+          req->result = PolyDB::Error::INVALID;
+        } else {
+          if (!db->load_snapshot(path_req->path)) {
             req->result = db->error().code();
           }
         }
@@ -1995,6 +2111,17 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         free(req);
         break;
       }
+    case KC_DUMP_SNAPSHOT:
+    case KC_LOAD_SNAPSHOT:
+      {
+        kc_path_req_t *path_req = static_cast<kc_path_req_t*>(work_req->data);
+        if (path_req->path) {
+          free(path_req->path);
+          path_req->path = NULL;
+        }
+        free(req);
+        break;
+      }
     default:
       assert(0);
   }
@@ -2040,6 +2167,8 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("match_similar"), FunctionTemplate::New(MatchSimilar)->GetFunction());
   prottpl->Set(String::NewSymbol("copy"), FunctionTemplate::New(Copy)->GetFunction());
   prottpl->Set(String::NewSymbol("merge"), FunctionTemplate::New(Merge)->GetFunction());
+  prottpl->Set(String::NewSymbol("dump_snapshot"), FunctionTemplate::New(DumpSnapshot)->GetFunction());
+  prottpl->Set(String::NewSymbol("load_snapshot"), FunctionTemplate::New(LoadSnapshot)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);
