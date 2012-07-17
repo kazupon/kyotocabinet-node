@@ -511,16 +511,15 @@ typedef struct kc_accept_req_t {
 
 class InternalVisitor : public PolyDB::Visitor {
 public:
-  Persistent<Object> &visitor_;
+  Local<Object> &visitor_;
   bool writable_;
 
-  explicit InternalVisitor(Persistent<Object> &visitor, bool writable) :
+  explicit InternalVisitor(Local<Object> &visitor, bool writable) :
     visitor_(visitor), writable_(writable) {
     TRACE("ctor\n");
   }
   ~InternalVisitor() {
     TRACE("destor\n");
-    visitor_.Dispose();
   }
 private:
   const char* visit_full(const char *kbuf, size_t ksiz,
@@ -1609,52 +1608,51 @@ Handle<Value> PolyDBWrap::Accept(const Arguments &args) {
     return args.This();
   }
 
-  kc_accept_req_t *req = (kc_accept_req_t *)malloc(sizeof(kc_accept_req_t));
-  req->type = KC_ACCEPT;
-  req->result = PolyDB::Error::SUCCESS;
-  req->wrapdb = obj;
-  req->cb.Clear();
-  req->key = NULL;
-  req->visitor.Clear();
-  req->writable = true;
+  PolyDB::Error::Code result = PolyDB::Error::SUCCESS;
+  Local<Function> cb;
+  bool writable = true;
+  char *key = NULL;
+  Local<Object> visitor;
+  cb.Clear();
+  visitor.Clear();
 
   if (args.Length() == 1) {
     if (args[0]->IsFunction()) {
-      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+      cb = Local<Function>::New(Handle<Function>::Cast(args[0]));
     } else if (args[0]->IsObject()) {
       if (args[0]->ToObject()->Has(key_sym)) {
-        String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
-        req->key = kc::strdup(*key);
+        String::Utf8Value _key(args[0]->ToObject()->Get(key_sym));
+        key = kc::strdup(*_key);
       }
       if (args[0]->ToObject()->Has(visitor_sym)) {
-        req->visitor = Persistent<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+        visitor = Local<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
       }
       if (args[0]->ToObject()->Has(writable_sym)) {
-        req->writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+        writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
       }
     }
   } else {
     if (args[0]->ToObject()->Has(key_sym)) {
-      String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
-      req->key = kc::strdup(*key);
+      String::Utf8Value _key(args[0]->ToObject()->Get(key_sym));
+      key = kc::strdup(*_key);
     }
     if (args[0]->ToObject()->Has(visitor_sym)) {
-      req->visitor = Persistent<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+      visitor = Local<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
     }
     if (args[0]->ToObject()->Has(writable_sym)) {
-      req->writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+      writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
     }
-    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+    cb = Local<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
   // TODO' should be non-blocking implements ...
   // execute
-  if (req->key == NULL || req->visitor.IsEmpty()) {
-    req->result = PolyDB::Error::INVALID;
+  if (key == NULL || visitor.IsEmpty()) {
+    result = PolyDB::Error::INVALID;
   } else {
-    InternalVisitor visitor(req->visitor, req->writable);
-    if (!obj->db_->accept(req->key, strlen(req->key), &visitor, req->writable)) {
-      req->result = obj->db_->error().code();
+    InternalVisitor _visitor(visitor, writable);
+    if (!obj->db_->accept(key, strlen(key), &_visitor, writable)) {
+      result = obj->db_->error().code();
     }
   }
 
@@ -1664,30 +1662,27 @@ Handle<Value> PolyDBWrap::Accept(const Arguments &args) {
   };
 
   // set error to callback arguments.
-  if (req->result != PolyDB::Error::SUCCESS) {
-    const char *name = PolyDB::Error::codename(req->result);
+  if (result != PolyDB::Error::SUCCESS) {
+    const char *name = PolyDB::Error::codename(result);
     Local<String> message = String::NewSymbol(name);
     Local<Value> err = Exception::Error(message);
     Local<Object> obj = err->ToObject();
-    obj->Set(String::NewSymbol("code"), Integer::New(req->result), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
+    obj->Set(String::NewSymbol("code"), Integer::New(result), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
     argv[0] = err;
   }
 
-
   // execute callback
-  if (!req->cb.IsEmpty()) {
+  if (!cb.IsEmpty()) {
     TryCatch try_catch;
-    MakeCallback(obj->handle_, req->cb, 1, argv);
+    MakeCallback(obj->handle_, cb, 1, argv);
     if (try_catch.HasCaught()) {
       FatalException(try_catch);
     }
   } 
 
-  req->cb.Dispose();
-  req->wrapdb = NULL;
-
-  SAFE_REQ_ATTR_FREE(req, key);
-  free(req);
+  if (key) {
+    free(key);
+  }
   /*
   uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
   uv_req->data = req;
@@ -1724,22 +1719,22 @@ Handle<Value> PolyDBWrap::AcceptBulk(const Arguments &args) {
   }
 
   PolyDB::Error::Code result = PolyDB::Error::SUCCESS;
-  Persistent<Function> cb;
+  Local<Function> cb;
   bool writable = true;
   StringVector *keys = NULL;
-  Persistent<Object> visitor;
+  Local<Object> visitor;
   cb.Clear();
   visitor.Clear();
 
   if (args.Length() == 1) {
     if (args[0]->IsFunction()) {
-      cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+      cb = Local<Function>::New(Handle<Function>::Cast(args[0]));
     } else if (args[0]->IsObject()) {
       if (args[0]->ToObject()->Has(keys_sym)) {
         keys = Array2Vector(args[0]->ToObject()->Get(keys_sym));
       }
       if (args[0]->ToObject()->Has(visitor_sym)) {
-        visitor = Persistent<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+        visitor = Local<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
       }
       if (args[0]->ToObject()->Has(writable_sym)) {
         writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
@@ -1750,15 +1745,15 @@ Handle<Value> PolyDBWrap::AcceptBulk(const Arguments &args) {
       keys = Array2Vector(args[0]->ToObject()->Get(keys_sym));
     }
     if (args[0]->ToObject()->Has(visitor_sym)) {
-      visitor = Persistent<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+      visitor = Local<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
     }
     if (args[0]->ToObject()->Has(writable_sym)) {
       writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
     }
-    cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+    cb = Local<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
-  // TODO' should be non-blocking implements ...
+  // TODO: should be non-blocking implements ...
   // execute
   if (keys == NULL || visitor.IsEmpty()) {
     result = PolyDB::Error::INVALID;
@@ -1794,7 +1789,6 @@ Handle<Value> PolyDBWrap::AcceptBulk(const Arguments &args) {
     }
   } 
 
-  cb.Dispose();
   if (keys) {
     delete keys;
   }
