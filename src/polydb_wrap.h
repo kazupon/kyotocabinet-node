@@ -55,6 +55,7 @@ class PolyDBWrap : public ObjectWrap {
     static Handle<Value> Iterate(const Arguments &args);
     static Handle<Value> BeginTransaction(const Arguments &args);
     static Handle<Value> EndTransaction(const Arguments &args);
+    static Handle<Value> Synchronize(const Arguments &args);
 
     static Persistent<FunctionTemplate> ctor;
     static Persistent<String> code_symbol;

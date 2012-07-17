@@ -5279,6 +5279,165 @@ describe('DB class tests', function () {
     });
 
 
+    var file_proc_call_count = 0;
+
+    // 
+    // synchronize
+    //
+    describe('db not open', function () {
+      it('should be `INVALID` error', function (done) {
+        new DB().synchronize({
+          proc: function (path, count, size) {},
+          hard: true
+        }, function (err) {
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var adb;
+      var fname = 'synchronize.kct';
+      before(function (done) {
+        adb = new DB();
+        adb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      beforeEach(function (done) {
+        adb.set_bulk({
+          recs: {
+            key1: 'hello',
+            key2: 'world'
+          }
+        }, function (err, num) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        adb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function (err) {
+            done();
+          });
+        });
+      });
+      afterEach(function (done) {
+        file_proc_call_count = 0;
+        adb.clear(function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      describe('call `synchronize` method parameter check', function () {
+        describe('with specific `proc` type number', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              adb.synchronize({ proc: 1, hard: true });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific `hard` type not boolean', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              adb.synchronize({
+                proc: function () {},
+                hard: 1
+              });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+      });
+      describe('with specific proc -> `function object (return true)`, hard -> `true`', function () {
+        beforeEach(function (done) {
+          adb.synchronize({
+            proc: function (path, count, size) {
+              file_proc_call_count++;
+              path.should.be.a.ok;
+              count.should.be.a.ok;
+              size.should.be.a.ok;
+              return true;
+            },
+            hard: true
+          }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        it('should be called `proc` function', function (done) {
+          file_proc_call_count.should.eql(1);
+          done();
+        });
+      });
+      describe('with specific proc -> `function object (return false)`, hard -> `true`', function () {
+        it('should be `NOLOGIC` error', function (done) {
+          adb.synchronize({
+            proc: function (path, count, size) {
+              file_proc_call_count++;
+              path.should.be.a.ok;
+              count.should.be.a.ok;
+              size.should.be.a.ok;
+              return false;
+            },
+            hard: true
+          }, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.LOGIC);
+            done();
+          });
+        });
+      });
+      describe('with specific hard -> `false` (ommit proc)', function () {
+        it('should be `success`', function (done) {
+          adb.synchronize({
+            hard: false
+          }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+      });
+      describe('with specific proc -> `function object` (ommit hard)', function () {
+        beforeEach(function (done) {
+          adb.synchronize({
+            proc: function (path, count, size) {
+              file_proc_call_count++; 
+              path.should.be.a.ok;
+              count.should.be.a.ok;
+              size.should.be.a.ok;
+              return true;
+            }
+          }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        it('should be called `proc` function', function (done) {
+          file_proc_call_count.should.eql(1);
+          done();
+        });
+      });
+      describe('with no specific', function () {
+        it('should be `success`', function (done) {
+          adb.synchronize(function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+      });
+    });
+
+
+
   });
 });
 
