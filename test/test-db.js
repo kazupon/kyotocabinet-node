@@ -4598,6 +4598,188 @@ describe('DB class tests', function () {
     });
     
 
+    // 
+    // transaction
+    //
+    describe('db not open', function () {
+      describe('when call `transaction`', function () {
+        it('should be `INVALID` error', function (done) {
+          new DB().transaction(function (err, commit) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            commit(false);
+            done();
+          });
+        });
+      });
+    });
+    describe('db open', function () {
+      var adb;
+      var fname = 'transaction.kct';
+      before(function (done) {
+        adb = new DB();
+        adb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        adb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function (err) {
+            done();
+          });
+        });
+      });
+      afterEach(function (done) {
+        adb.clear(function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      describe('iligale parameter check', function () {
+        describe('transaction', function () {
+          describe('with specific `hard` type not boolean', function () {
+            it('should occured `TypeError` exception', function (done) {
+              try {
+                adb.begin_transaction(1);
+              } catch(e) {
+                e.should.be.an.instanceOf(TypeError);
+                done();
+              }
+            });
+          });
+          describe('with no specific', function () {
+            it('should occured `TypeError` exception', function (done) {
+              try {
+                adb.begin_transaction();
+              } catch(e) {
+                e.should.be.an.instanceOf(TypeError);
+                done();
+              }
+            });
+          });
+        });
+      });
+      describe('when call `transaction` with specific hard -> `true`', function () {
+        describe('when set key -> `key1`, value -> `hello` record', function () {
+          describe('when call commit function with specific `true`', function () {
+            beforeEach(function (done) {
+              adb.transaction(true, function (err, commit) {
+                if (err) { return done(err); }
+                adb.set({ key: 'key1', value: 'hello' }, function (err) {
+                  if (err) { return done(err); }
+                  commit(true);
+                  done();
+                });
+              });
+            });
+            describe('when get `key1` key', function () {
+              it('should be `hello` value', function (done) {
+                adb.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  done();
+                });
+              });
+            });
+          });
+          describe('when call commit function with specific `false`', function () {
+            beforeEach(function (done) {
+              adb.transaction(true, function (err, commit) {
+                if (err) { return done(err); }
+                adb.set({ key: 'key1', value: 'hello' }, function (err) {
+                  if (err) { return done(err); }
+                  commit(false);
+                  done();
+                });
+              });
+            });
+            describe('when get `key1` key', function () {
+              it('should be `NOREC` error', function (done) {
+                adb.get({ key: 'key1' }, function (err, value) {
+                  err.should.have.property('code');
+                  err.code.should.eql(Error.NOREC);
+                  done();
+                });
+              });
+            });
+          });
+          describe('when call commit function with no specific', function () {
+            beforeEach(function (done) {
+              adb.transaction(true, function (err, commit) {
+                if (err) { return done(err); }
+                adb.set({ key: 'key1', value: 'hello' }, function (err) {
+                  if (err) { return done(err); }
+                  commit();
+                  done();
+                });
+              });
+            });
+            describe('when get `key1` key', function () {
+              it('should be `hello` value', function (done) {
+                adb.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  done();
+                });
+              });
+            });
+          });
+        });
+      });
+      describe('when call `transaction` with specific hard -> `false`', function () {
+        describe('when set key -> `key1`, value -> `hello` record', function () {
+          describe('when call commit function with specific `true`', function () {
+            beforeEach(function (done) {
+              adb.transaction(false, function (err, commit) {
+                if (err) { return done(err); }
+                adb.set({ key: 'key1', value: 'hello' }, function (err) {
+                  if (err) { return done(err); }
+                  commit(true);
+                  done();
+                });
+              });
+            });
+            describe('when get `key1` key', function () {
+              it('should be `hello` value', function (done) {
+                adb.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  done();
+                });
+              });
+            });
+          });
+        });
+      });
+      describe('when call `begin_transaction` with specific hard ommit', function () {
+        describe('when set key -> `key1`, value -> `hello` record', function () {
+          describe('when call commit function with specific `true`', function () {
+            beforeEach(function (done) {
+              adb.transaction(function (err, commit) {
+                if (err) { return done(err); }
+                adb.set({ key: 'key1', value: 'hello' }, function (err) {
+                  if (err) { return done(err); }
+                  commit(true);
+                  done();
+                });
+              });
+            });
+            describe('when get `key1` key', function () {
+              it('should be `hello` value', function (done) {
+                adb.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  done();
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+
 
   });
 });
