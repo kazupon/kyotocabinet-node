@@ -518,6 +518,10 @@ public:
     visitor_(visitor), writable_(writable) {
     TRACE("ctor\n");
   }
+  ~InternalVisitor() {
+    TRACE("destor\n");
+    visitor_.Dispose();
+  }
 private:
   const char* visit_full(const char *kbuf, size_t ksiz,
                          const char *vbuf, size_t vsiz, size_t *sp) {
@@ -549,26 +553,28 @@ private:
         FatalException(try_catch);
       }
 
-      if (!ret.IsEmpty()) {
-        if (ret->IsNumber()) {
-          int64_t num_ret = ret->IntegerValue();
-          if (num_ret == 1) {
-            rv = REMOVE;
-          }
-        } else if (ret->IsString()) {
-          String::Utf8Value str_ret(ret->ToString());
-          if (*str_ret) {
-            rv = *str_ret;
-            //rv = kc::strdup(*str_ret);
-            *sp = strlen(*str_ret);
+      if (writable_) {
+        if (!ret.IsEmpty()) {
+          if (ret->IsNumber()) {
+            int64_t num_ret = ret->IntegerValue();
+            if (num_ret == 1) {
+              rv = REMOVE;
+            }
+          } else if (ret->IsString()) {
+            String::Utf8Value str_ret(ret->ToString());
+            if (*str_ret) {
+              //rv = *str_ret;
+              //*sp = strlen(*str_ret);
+              rv = kc::strdup(*str_ret);
+              *sp = strlen(rv);
+            }
           }
         }
+      } else {
+        rv = NULL;
       }
     }
     
-    if (!writable_) {
-      rv = NULL;
-    }
     return rv;
   }
   const char* visit_empty(const char *kbuf, size_t ksiz, size_t *sp) {
@@ -599,26 +605,28 @@ private:
         FatalException(try_catch);
       }
 
-      if (!ret.IsEmpty()) {
-        if (ret->IsNumber()) {
-          int64_t num_ret = ret->IntegerValue();
-          if (num_ret == 1) {
-            rv = REMOVE;
-          }
-        } else if (ret->IsString()) {
-          String::Utf8Value str_ret(ret->ToString());
-          if (*str_ret) {
-            rv = *str_ret;
-            //rv = kc::strdup(*str_ret);
-            *sp = strlen(*str_ret);
+      if (writable_) {
+        if (!ret.IsEmpty()) {
+          if (ret->IsNumber()) {
+            int64_t num_ret = ret->IntegerValue();
+            if (num_ret == 1) {
+              rv = REMOVE;
+            }
+          } else if (ret->IsString()) {
+            String::Utf8Value str_ret(ret->ToString());
+            if (*str_ret) {
+              //rv = *str_ret;
+              //*sp = strlen(*str_ret);
+              rv = kc::strdup(*str_ret);
+              *sp = strlen(rv);
+            }
           }
         }
+      } else {
+        rv = NULL;
       }
     }
 
-    if (!writable_) {
-      rv = NULL;
-    }
     return rv;
   }
   /*
@@ -1692,6 +1700,110 @@ Handle<Value> PolyDBWrap::Accept(const Arguments &args) {
   return scope.Close(args.This());
 }
 
+Handle<Value> PolyDBWrap::AcceptBulk(const Arguments &args) {
+  TRACE("AcceptBulk\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> keys_sym = String::NewSymbol("keys");
+  Local<String> visitor_sym = String::NewSymbol("visitor");
+  Local<String> writable_sym = String::NewSymbol("writable");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && !args[0]->ToObject()->Get(keys_sym)->IsArray()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ||
+       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && !args[0]->ToObject()->Get(keys_sym)->IsArray()) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  PolyDB::Error::Code result = PolyDB::Error::SUCCESS;
+  Persistent<Function> cb;
+  bool writable = true;
+  StringVector *keys = NULL;
+  Persistent<Object> visitor;
+  cb.Clear();
+  visitor.Clear();
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
+      if (args[0]->ToObject()->Has(keys_sym)) {
+        keys = Array2Vector(args[0]->ToObject()->Get(keys_sym));
+      }
+      if (args[0]->ToObject()->Has(visitor_sym)) {
+        visitor = Persistent<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+      }
+      if (args[0]->ToObject()->Has(writable_sym)) {
+        writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+      }
+    }
+  } else {
+    if (args[0]->ToObject()->Has(keys_sym)) {
+      keys = Array2Vector(args[0]->ToObject()->Get(keys_sym));
+    }
+    if (args[0]->ToObject()->Has(visitor_sym)) {
+      visitor = Persistent<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+    }
+    if (args[0]->ToObject()->Has(writable_sym)) {
+      writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+    }
+    cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+  
+  // TODO' should be non-blocking implements ...
+  // execute
+  if (keys == NULL || visitor.IsEmpty()) {
+    result = PolyDB::Error::INVALID;
+  } else {
+    InternalVisitor _visitor(visitor, writable);
+    if (!obj->db_->accept_bulk(*keys, &_visitor, writable)) {
+      result = obj->db_->error().code();
+    }
+  }
+
+  // init callback arguments.
+  Local<Value> argv[1] = { 
+    Local<Value>::New(Null()),
+  };
+
+  // set error to callback arguments.
+  if (result != PolyDB::Error::SUCCESS) {
+    const char *name = PolyDB::Error::codename(result);
+    Local<String> message = String::NewSymbol(name);
+    Local<Value> err = Exception::Error(message);
+    Local<Object> obj = err->ToObject();
+    obj->Set(String::NewSymbol("code"), Integer::New(result), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
+    argv[0] = err;
+  }
+
+
+  // execute callback
+  if (!cb.IsEmpty()) {
+    TryCatch try_catch;
+    MakeCallback(obj->handle_, cb, 1, argv);
+    if (try_catch.HasCaught()) {
+      FatalException(try_catch);
+    }
+  } 
+
+  cb.Dispose();
+  if (keys) {
+    delete keys;
+  }
+
+  return scope.Close(args.This());
+}
+
+
+
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -2256,6 +2368,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("dump_snapshot"), FunctionTemplate::New(DumpSnapshot)->GetFunction());
   prottpl->Set(String::NewSymbol("load_snapshot"), FunctionTemplate::New(LoadSnapshot)->GetFunction());
   prottpl->Set(String::NewSymbol("accept"), FunctionTemplate::New(Accept)->GetFunction());
+  prottpl->Set(String::NewSymbol("accept_bulk"), FunctionTemplate::New(AcceptBulk)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);
