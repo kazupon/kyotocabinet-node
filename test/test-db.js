@@ -4379,6 +4379,504 @@ describe('DB class tests', function () {
 
 
     // 
+    // iterate
+    //
+    describe('db not open', function () {
+      it('should be `INVALID` error', function (done) {
+        new DB().iterate({
+          visitor: {
+            visit_full: function (key, value) { return Visitor.NOP; },
+            visit_empty: function (key) { return Visitor.NOP; }
+          },
+          writable: false
+        }, function (err) {
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var adb;
+      var fname = 'iterate.kct';
+      before(function (done) {
+        adb = new DB();
+        adb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      beforeEach(function (done) {
+        adb.set_bulk({
+          recs: {
+            key1: 'hello',
+            key2: 'world',
+            key3: 'hoge',
+            key4: 'foo',
+            key5: 'bar'
+          }
+        }, function (err, num) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        adb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function (err) {
+            done();
+          });
+        });
+      });
+      afterEach(function (done) {
+        visit_full_call_count = 0;
+        visit_call_count = 0;
+        adb.clear(function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      describe('call `iterate` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              adb.iterate();
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific `visitor` type number', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              adb.iterate({ visitor: 1, writable: false });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific `writable` type not boolean', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              adb.iterate({
+                visitor: function (key, value) { return Visitor.NOP; },
+                writable: 1
+              });
+            } catch(e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+      });
+      describe('with specific visitor -> `no operation visit_full visitor`, writable -> `true`', function () {
+        beforeEach(function (done) {
+          adb.iterate({
+            visitor: {
+              visit_full: function (key, value) {
+                key.should.be.a.ok;
+                value.should.be.a.ok;
+                visit_full_call_count++;
+                return Visitor.NOP;
+              }
+            },
+            writable: true
+          }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        it('should be `5` called `visit_full` method', function (done) {
+          visit_full_call_count.should.eql(5);
+          done();
+        });
+      });
+      describe('with specific visitor -> `remove visit_full visitor`, writable -> `true`', function () {
+        beforeEach(function (done) {
+          adb.iterate({
+            visitor: {
+              visit_full: function (key, value) {
+                key.should.be.a.ok;
+                value.should.be.a.ok;
+                visit_full_call_count++;
+                return Visitor.REMOVE;
+              }
+            },
+            writable: true
+          }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        it('should be `5` called `visit_full` method', function (done) {
+          visit_full_call_count.should.eql(5);
+          done();
+        });
+        it('should be `0` recode count', function (done) {
+          adb.count(function (err, num) {
+            if (err) { return done(err); }
+            num.should.eql(0);
+            done();
+          });
+        });
+      });
+      describe('with specific visitor -> `update visit_full visitor`, writable -> `true`', function () {
+        beforeEach(function (done) {
+          adb.iterate({
+            visitor: {
+              visit_full: function (key, value) {
+                visit_full_call_count++;
+                return 'hogehogehoge';
+              }
+            },
+            writable: true
+          }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        it('should be `5` called `visit_full` method', function (done) {
+          visit_full_call_count.should.eql(5);
+          done();
+        });
+        it('should be get all `hogehogehoge` values', function (done) {
+          adb.get_bulk({
+            keys: [ 'key1', 'key2', 'key3', 'key4', 'key5' ]
+          }, function (err, values) {
+            if (err) { return done(err); }
+            for (var key in values) {
+              values[key].should.eql('hogehogehoge');
+            }
+            done();
+          });
+        });
+      });
+      describe('with specific visitor -> `visit_full multi operation visitor`, writable -> `true`', function () {
+        beforeEach(function (done) {
+          adb.iterate({
+            visitor: {
+              visit_full: function (key, value) {
+                visit_full_call_count++;
+                var ret = Visitor.NOP;
+                switch (key) {
+                  case 'key3':
+                    ret = Visitor.REMOVE;
+                    break;
+                  case 'key4':
+                    ret = Visitor.REMOVE;
+                    break;
+                  case 'key5':
+                    ret = 'dio';
+                    break;
+                }
+                return ret;
+              }
+            },
+            writable: true
+          }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        it('should be `5` called `visit_full` method', function (done) {
+          visit_full_call_count.should.eql(5);
+          done();
+        });
+        it('should be get `hello` value from `key1` key', function (done) {
+          adb.get({ key: 'key1' }, function (err, value) {
+            if (err) { return done(err); }
+            value.should.eql('hello');
+            done();
+          });
+        });
+        it('should be get `world` value from `key2` key', function (done) {
+          adb.get({ key: 'key2' }, function (err, value) {
+            if (err) { return done(err); }
+            value.should.eql('world');
+            done();
+          });
+        });
+        it('should be `NOREC` error from `key3` key', function (done) {
+          adb.get({ key: 'key3' }, function (err, value) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+        it('should be `NOREC` error from `key4` key', function (done) {
+          adb.get({ key: 'key4' }, function (err, value) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+        it('should be get `dio` value from `key5` key', function (done) {
+          adb.get({ key: 'key5' }, function (err, value) {
+            if (err) { return done(err); }
+            value.should.eql('dio');
+            done();
+          });
+        });
+      });
+      describe('with specific visitor -> `no operation visitor function object`, writable -> `true`', function () {
+        var visit;
+        beforeEach(function (done) {
+          visit = function (key, value) {
+            key.should.be.a.ok;
+            value.should.be.a.ok;
+            visit_call_count++;
+            return Visitor.NOP;
+          };
+          adb.iterate({
+            visitor: visit,
+            writable: true
+          }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        it('should be `5` called `visitor` function', function (done) {
+          visit_call_count.should.eql(5);
+          done();
+        });
+      });
+      describe('with specific visitor -> `remove operation visitor function object`, writable -> `true`', function () {
+        var visit;
+        beforeEach(function (done) {
+          visit = function (key, value) {
+            key.should.be.a.ok;
+            value.should.be.a.ok;
+            visit_call_count++;
+            return Visitor.REMOVE;
+          };
+          adb.iterate({
+            visitor: visit,
+            writable: true
+          }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        it('should be `5` called `visitor` function', function (done) {
+          visit_call_count.should.eql(5);
+          done();
+        });
+        it('should be `NOREC` error from `key1` key', function (done) {
+          adb.get({ key: 'key1' }, function (err, value) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+      });
+      describe('with specific visitor -> `update operation visitor function object`, writable -> `true`', function () {
+        var visit;
+        beforeEach(function (done) {
+          visit = function (key, value) {
+            visit_call_count++;
+            return (key === 'key2' ? 'the' : 'world');
+          };
+          adb.iterate({
+            visitor: visit,
+            writable: true
+          }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        it('should be `5` called `visitor` function', function (done) {
+          visit_call_count.should.eql(5);
+          done();
+        });
+        it('should be get changed record values', function (done) {
+          adb.get_bulk({
+            keys: [ 'key1', 'key2', 'key3', 'key4', 'key5' ]
+          }, function (err, values) {
+            if (err) { return done(err); }
+            values['key1'].should.eql('world');
+            values['key2'].should.eql('the');
+            values['key3'].should.eql('world');
+            values['key4'].should.eql('world');
+            values['key5'].should.eql('world');
+            done();
+          });
+        });
+      });
+      describe('with specific writable -> `false` (ommit visitor)', function () {
+        it('should be `INVALID` error', function (done) {
+          adb.iterate({
+            writable: false
+          }, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+      describe('with specific visitor -> `multi operation visitor function`, writable -> `true`', function () {
+        beforeEach(function (done) {
+          adb.iterate({
+            visitor: function (key, value) {
+              visit_call_count++;
+              var ret = Visitor.NOP;
+              switch (key) {
+                case 'key3':
+                  ret = Visitor.REMOVE;
+                  break;
+                case 'key4':
+                  ret = Visitor.REMOVE;
+                  break;
+                case 'key5':
+                  ret = 'dio';
+                  break;
+              }
+              return ret;
+            },
+            writable: true
+          }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        it('should be `5` called `visit` function', function (done) {
+          visit_call_count.should.eql(5);
+          done();
+        });
+        it('should be get `hello` value from `key1` key', function (done) {
+          adb.get({ key: 'key1' }, function (err, value) {
+            if (err) { return done(err); }
+            value.should.eql('hello');
+            done();
+          });
+        });
+        it('should be get `world` value from `key2` key', function (done) {
+          adb.get({ key: 'key2' }, function (err, value) {
+            if (err) { return done(err); }
+            value.should.eql('world');
+            done();
+          });
+        });
+        it('should be `NOREC` error from `key3` key', function (done) {
+          adb.get({ key: 'key3' }, function (err, value) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+        it('should be `NOREC` error from `key4` key', function (done) {
+          adb.get({ key: 'key4' }, function (err, value) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+        it('should be get `dio` value from `key5` key', function (done) {
+          adb.get({ key: 'key5' }, function (err, value) {
+            if (err) { return done(err); }
+            value.should.eql('dio');
+            done();
+          });
+        });
+      });
+      describe('with specific visitor -> `multi operation visitor function`, writable -> `false`', function () {
+        beforeEach(function (done) {
+          adb.iterate({
+            visitor: function (key, value) {
+              visit_call_count++;
+              var ret = Visitor.NOP;
+              switch (key) {
+                case 'key3':
+                  ret = Visitor.REMOVE;
+                  break;
+                case 'key4':
+                  ret = Visitor.REMOVE;
+                  break;
+                case 'key5':
+                  ret = 'dio';
+                  break;
+              }
+              return ret;
+            },
+            writable: false
+          }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        it('should be `5` called `visit` function', function (done) {
+          visit_call_count.should.eql(5);
+          done();
+        });
+        it('should be get `hello` value from `key1` key', function (done) {
+          adb.get({ key: 'key1' }, function (err, value) {
+            if (err) { return done(err); }
+            value.should.eql('hello');
+            done();
+          });
+        });
+        it('should be get `world` value from `key2` key', function (done) {
+          adb.get({ key: 'key2' }, function (err, value) {
+            if (err) { return done(err); }
+            value.should.eql('world');
+            done();
+          });
+        });
+        it('should be get `hoge` value from `key3` key', function (done) {
+          adb.get({ key: 'key3' }, function (err, value) {
+            if (err) { return done(err); }
+            value.should.eql('hoge');
+            done();
+          });
+        });
+        it('should be get `foo` value from `key4` key', function (done) {
+          adb.get({ key: 'key4' }, function (err, value) {
+            if (err) { return done(err); }
+            value.should.eql('foo');
+            done();
+          });
+        });
+        it('should be get `bar` value from `key5` key', function (done) {
+          adb.get({ key: 'key5' }, function (err, value) {
+            if (err) { return done(err); }
+            value.should.eql('bar');
+            done();
+          });
+        });
+      });
+      describe('with specific visitor -> `update function visitor` (ommit  writable)', function () {
+        beforeEach(function (done) {
+          adb.iterate({
+            visitor: function (key, value) {
+              visit_call_count++;
+              return 'hello';
+            }
+          }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        it('should be `5` called `visit` function', function (done) {
+          visit_call_count.should.eql(5);
+          done();
+        });
+        it('should be get all `hello` values', function (done) {
+          adb.get_bulk({
+            keys: [ 'key1', 'key2', 'key3', 'key4', 'key5' ]
+          }, function (err, values) {
+            if (err) { return done(err); }
+            for (var key in values) {
+              values[key].should.eql('hello');
+            }
+            done();
+          });
+        });
+      });
+    });
+
+
+    // 
     // begin_transaction / end_transaction
     //
     describe('db not open', function () {

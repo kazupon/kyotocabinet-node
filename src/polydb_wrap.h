@@ -52,6 +52,7 @@ class PolyDBWrap : public ObjectWrap {
     static Handle<Value> LoadSnapshot(const Arguments &args);
     static Handle<Value> Accept(const Arguments &args);
     static Handle<Value> AcceptBulk(const Arguments &args);
+    static Handle<Value> Iterate(const Arguments &args);
     static Handle<Value> BeginTransaction(const Arguments &args);
     static Handle<Value> EndTransaction(const Arguments &args);
 

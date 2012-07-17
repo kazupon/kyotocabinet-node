@@ -434,6 +434,7 @@ enum kc_req_type {
   KC_LOAD_SNAPSHOT,
   KC_ACCEPT,
   KC_ACCEPT_BULK,
+  KC_ITERATE,
   KC_BEGIN_TRANSACTION,
   KC_END_TRANSACTION,
 };
@@ -1871,6 +1872,93 @@ Handle<Value> PolyDBWrap::AcceptBulk(const Arguments &args) {
   return scope.Close(args.This());
 }
 
+Handle<Value> PolyDBWrap::Iterate(const Arguments &args) {
+  TRACE("Iterate\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> visitor_sym = String::NewSymbol("visitor");
+  Local<String> writable_sym = String::NewSymbol("writable");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ||
+       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  PolyDB::Error::Code result = PolyDB::Error::SUCCESS;
+  Local<Function> cb;
+  bool writable = true;
+  Local<Object> visitor;
+  cb.Clear();
+  visitor.Clear();
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      cb = Local<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
+      if (args[0]->ToObject()->Has(visitor_sym)) {
+        visitor = Local<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+      }
+      if (args[0]->ToObject()->Has(writable_sym)) {
+        writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+      }
+    }
+  } else {
+    if (args[0]->ToObject()->Has(visitor_sym)) {
+      visitor = Local<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+    }
+    if (args[0]->ToObject()->Has(writable_sym)) {
+      writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+    }
+    cb = Local<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+  
+  // TODO: should be non-blocking implements ...
+  // execute
+  if (visitor.IsEmpty()) {
+    result = PolyDB::Error::INVALID;
+  } else {
+    InternalVisitor _visitor(visitor, writable);
+    if (!obj->db_->iterate(&_visitor, writable)) {
+      result = obj->db_->error().code();
+    }
+  }
+
+  // init callback arguments.
+  Local<Value> argv[1] = { 
+    Local<Value>::New(Null()),
+  };
+
+  // set error to callback arguments.
+  if (result != PolyDB::Error::SUCCESS) {
+    const char *name = PolyDB::Error::codename(result);
+    Local<String> message = String::NewSymbol(name);
+    Local<Value> err = Exception::Error(message);
+    Local<Object> obj = err->ToObject();
+    obj->Set(String::NewSymbol("code"), Integer::New(result), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
+    argv[0] = err;
+  }
+
+
+  // execute callback
+  if (!cb.IsEmpty()) {
+    TryCatch try_catch;
+    MakeCallback(obj->handle_, cb, 1, argv);
+    if (try_catch.HasCaught()) {
+      FatalException(try_catch);
+    }
+  } 
+
+  return scope.Close(args.This());
+}
+
 DEFINE_BOOL_PARAM_FUNC(BeginTransaction, begin_transaction, false)
 DEFINE_BOOL_PARAM_FUNC(EndTransaction, end_transaction, true)
 
@@ -2450,6 +2538,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("load_snapshot"), FunctionTemplate::New(LoadSnapshot)->GetFunction());
   prottpl->Set(String::NewSymbol("accept"), FunctionTemplate::New(Accept)->GetFunction());
   prottpl->Set(String::NewSymbol("accept_bulk"), FunctionTemplate::New(AcceptBulk)->GetFunction());
+  prottpl->Set(String::NewSymbol("iterate"), FunctionTemplate::New(Iterate)->GetFunction());
   prottpl->Set(String::NewSymbol("begin_transaction"), FunctionTemplate::New(BeginTransaction)->GetFunction());
   prottpl->Set(String::NewSymbol("end_transaction"), FunctionTemplate::New(EndTransaction)->GetFunction());
 
