@@ -91,6 +91,65 @@ namespace kc = kyotocabinet;
     return args.This();                                                               \
   }                                                                                   \
 
+#define DEFINE_BOOL_PARAM_FUNC(Name, Method, INIT_VALUE)                                                                \
+  Handle<Value> PolyDBWrap::Name(const Arguments &args) {                                                               \
+    TRACE("%s\n", #Name);                                                                                               \
+    HandleScope scope;                                                                                                  \
+                                                                                                                        \
+    PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());                                                      \
+    assert(obj != NULL);                                                                                                \
+                                                                                                                        \
+    if ( (args.Length() == 0) ||                                                                                        \
+         (args.Length() == 1 && (!args[0]->IsBoolean()) & !args[0]->IsFunction()) ) {                                   \
+      ThrowException(Exception::TypeError(String::New("Bad argument")));                                                \
+      return args.This();                                                                                               \
+    }                                                                                                                   \
+                                                                                                                        \ 
+    PolyDB::Error::Code result = PolyDB::Error::SUCCESS;                                                                \
+    Local<Function> cb;                                                                                                 \
+    bool flag = INIT_VALUE;                                                                                             \
+    cb.Clear();                                                                                                         \
+                                                                                                                        \ 
+    if (args.Length() == 1) {                                                                                           \
+      if (args[0]->IsFunction()) {                                                                                      \
+        cb = Local<Function>::New(Handle<Function>::Cast(args[0]));                                                     \
+      } else if (args[0]->IsBoolean()) {                                                                                \
+        flag = args[0]->BooleanValue();                                                                                 \
+      }                                                                                                                 \
+    } else {                                                                                                            \
+      flag = args[0]->BooleanValue();                                                                                   \
+      cb = Local<Function>::New(Handle<Function>::Cast(args[1]));                                                       \
+    }                                                                                                                   \
+                                                                                                                        \
+    TRACE("call %s: flag = %d\n", #Method, flag);                                                                       \
+    if (!obj->db_->Method(flag)) {                                                                                      \
+      result = obj->db_->error().code();                                                                                \
+    }                                                                                                                   \
+                                                                                                                        \ 
+    Local<Value> argv[1] = {                                                                                            \
+      Local<Value>::New(Null()),                                                                                        \
+    };                                                                                                                  \
+                                                                                                                        \ 
+    if (result != PolyDB::Error::SUCCESS) {                                                                             \
+      const char *name = PolyDB::Error::codename(result);                                                               \
+      Local<String> message = String::NewSymbol(name);                                                                  \
+      Local<Value> err = Exception::Error(message);                                                                     \
+      Local<Object> obj = err->ToObject();                                                                              \
+      obj->Set(String::NewSymbol("code"), Integer::New(result), static_cast<PropertyAttribute>(ReadOnly | DontDelete)); \
+      argv[0] = err;                                                                                                    \
+    }                                                                                                                   \
+                                                                                                                        \ 
+    if (!cb.IsEmpty()) {                                                                                                \
+      TryCatch try_catch;                                                                                               \
+      MakeCallback(obj->handle_, cb, 1, argv);                                                                          \
+      if (try_catch.HasCaught()) {                                                                                      \
+        FatalException(try_catch);                                                                                      \
+      }                                                                                                                 \
+    }                                                                                                                   \ 
+                                                                                                                        \ 
+    return scope.Close(args.This());                                                                                    \
+  }                                                                                                                     \
+
 #define DEFINE_RET_FUNC(Name, Type, REQ_TYPE, INIT_VALUE)                   \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                   \
     HandleScope scope;                                                      \
@@ -278,6 +337,12 @@ namespace kc = kyotocabinet;
     }                                                                      \
   }                                                                        \
 
+#define DO_BOOL_PARAM_CMN_EXECUTE(Method, WorkReq)                                \
+  kc_boolean_cmn_req_t *req = static_cast<kc_boolean_cmn_req_t*>(WorkReq->data);  \
+  if (!db->Method(req->flag)) {                                                   \
+    req->result = db->error().code();                                             \
+  }                                                                               \
+
 #define DO_RET_EXECUTE(Method, WorkReq)                             \
   kc_ret_req_t *req = static_cast<kc_ret_req_t*>(WorkReq->data);    \
   req->ret = db->Method();                                          \
@@ -368,6 +433,9 @@ enum kc_req_type {
   KC_DUMP_SNAPSHOT,
   KC_LOAD_SNAPSHOT,
   KC_ACCEPT,
+  KC_ACCEPT_BULK,
+  KC_BEGIN_TRANSACTION,
+  KC_END_TRANSACTION,
 };
 
 // common request field
@@ -507,6 +575,13 @@ typedef struct kc_accept_req_t {
   Persistent<Object> visitor;
   bool writable;
 } kc_accept_req_t;
+
+// boolean parameter common request
+typedef struct kc_boolean_cmn_req_t {
+  KC_REQ_FIELD
+  bool flag;
+} kc_boolean_cmn_req_t;
+
 
 
 class InternalVisitor : public PolyDB::Visitor {
@@ -1796,7 +1871,8 @@ Handle<Value> PolyDBWrap::AcceptBulk(const Arguments &args) {
   return scope.Close(args.This());
 }
 
-
+DEFINE_BOOL_PARAM_FUNC(BeginTransaction, begin_transaction, false)
+DEFINE_BOOL_PARAM_FUNC(EndTransaction, end_transaction, true)
 
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
@@ -2028,6 +2104,10 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
         }
         break;
       }
+    case KC_BEGIN_TRANSACTION:
+      { DO_BOOL_PARAM_CMN_EXECUTE(begin_transaction, work_req); break; }
+    case KC_END_TRANSACTION:
+      { DO_BOOL_PARAM_CMN_EXECUTE(end_transaction, work_req); break; }
       */
     default:
       assert(0);
@@ -2313,6 +2393,13 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         free(accept_req);
         break;
       }
+    case KC_BEGIN_TRANSACTION:
+    case KC_END_TRANSACTION:
+      {
+        kc_boolean_cmn_req_t *tran_req = static_cast<kc_boolean_cmn_req_t*>(work_req->data);
+        free(tran_req);
+        break;
+      }
       */
     default:
       assert(0);
@@ -2363,6 +2450,8 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("load_snapshot"), FunctionTemplate::New(LoadSnapshot)->GetFunction());
   prottpl->Set(String::NewSymbol("accept"), FunctionTemplate::New(Accept)->GetFunction());
   prottpl->Set(String::NewSymbol("accept_bulk"), FunctionTemplate::New(AcceptBulk)->GetFunction());
+  prottpl->Set(String::NewSymbol("begin_transaction"), FunctionTemplate::New(BeginTransaction)->GetFunction());
+  prottpl->Set(String::NewSymbol("end_transaction"), FunctionTemplate::New(EndTransaction)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);

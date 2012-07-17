@@ -4378,6 +4378,227 @@ describe('DB class tests', function () {
     });
 
 
+    // 
+    // begin_transaction / end_transaction
+    //
+    describe('db not open', function () {
+      describe('when call `begin_transaction`', function () {
+        it('should be `INVALID` error', function (done) {
+          new DB().begin_transaction(function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+      describe('when call `end_transaction`', function () {
+        it('should be `INVALID` error', function (done) {
+          new DB().end_transaction(function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+    });
+    describe('db open', function () {
+      var adb;
+      var fname = 'begin_end_transaction.kct';
+      before(function (done) {
+        adb = new DB();
+        adb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        adb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function (err) {
+            done();
+          });
+        });
+      });
+      afterEach(function (done) {
+        adb.clear(function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      describe('iligale parameter check', function () {
+        describe('begin_transaction', function () {
+          describe('with specific `hard` type not boolean', function () {
+            it('should occured `TypeError` exception', function (done) {
+              try {
+                adb.begin_transaction(1);
+              } catch(e) {
+                e.should.be.an.instanceOf(TypeError);
+                done();
+              }
+            });
+          });
+        });
+        describe('end_transaction', function () {
+          describe('with specific `commit` type not boolean', function () {
+            it('should occured `TypeError` exception', function (done) {
+              try {
+                adb.end_transaction(1);
+              } catch(e) {
+                e.should.be.an.instanceOf(TypeError);
+                done();
+              }
+            });
+          });
+        });
+      });
+      describe('not execute `begin_transaction`', function () {
+        describe('when call `end_transaction` with specific commit -> `true`', function () {
+          it('should be `INVALID` error', function (done) {
+            adb.end_transaction(true, function (err) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.INVALID);
+              done();
+            });
+          });
+        });
+      });
+      describe('when call `begin_transaction` with specific hard -> `true`', function () {
+        beforeEach(function (done) {
+          adb.begin_transaction(true, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        describe('when set key -> `key1`, value -> `hello` record', function () {
+          beforeEach(function (done) {
+            adb.set({ key: 'key1', value: 'hello' }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+          describe('when call `end_transaction` with specific commit -> `true`', function () {
+            beforeEach(function (done) {
+              adb.end_transaction(true, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+            describe('when get `key1` key', function () {
+              it('should be `hello` value', function (done) {
+                adb.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  done();
+                });
+              });
+            });
+          });
+          describe('when call `end_transaction` with specific commit -> `false`', function () {
+            beforeEach(function (done) {
+              adb.end_transaction(false, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+            describe('when get `key1` key', function () {
+              it('should be `NOREC` error', function (done) {
+                adb.get({ key: 'key1' }, function (err, value) {
+                  err.should.have.property('code');
+                  err.code.should.eql(Error.NOREC);
+                  done();
+                });
+              });
+            });
+          });
+          describe('when call `end_transaction` with specific commit ommit', function () {
+            beforeEach(function (done) {
+              adb.end_transaction(function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+            describe('when get `key1` key', function () {
+              it('should be `hello` value', function (done) {
+                adb.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  done();
+                });
+              });
+            });
+          });
+        });
+      });
+      describe('when call `begin_transaction` with specific hard -> `false`', function () {
+        beforeEach(function (done) {
+          adb.begin_transaction(false, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        describe('when set key -> `key1`, value -> `hello` record', function () {
+          beforeEach(function (done) {
+            adb.set({ key: 'key1', value: 'hello' }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+          describe('when call `end_transaction` with specific commit ommit', function () {
+            beforeEach(function (done) {
+              adb.end_transaction(function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+            describe('when get `key1` key', function () {
+              it('should be `hello` value', function (done) {
+                adb.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  done();
+                });
+              });
+            });
+          });
+        });
+      });
+      describe('when call `begin_transaction` with specific hard ommit', function () {
+        beforeEach(function (done) {
+          adb.begin_transaction(function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        describe('when set key -> `key1`, value -> `hello` record', function () {
+          beforeEach(function (done) {
+            adb.set({ key: 'key1', value: 'hello' }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+          describe('when call `end_transaction` with specific commit ommit', function () {
+            beforeEach(function (done) {
+              adb.end_transaction(function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+            describe('when get `key1` key', function () {
+              it('should be `hello` value', function (done) {
+                adb.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  done();
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+    
+
+
   });
 });
 
