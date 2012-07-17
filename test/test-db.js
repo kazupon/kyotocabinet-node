@@ -1623,6 +1623,76 @@ describe('DB class tests', function () {
 
 
     // 
+    // path
+    //
+    describe('db not open', function () {
+      it('should be `INVALID` error', function (done) {
+        new DB().path(function (err, name) {
+          err.should.have.property('code');
+          err.code.should.eql(Error.INVALID);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      var cdb;
+      var fname = 'path.kch';
+      before(function (done) {
+        cdb = new DB();
+        cdb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        cdb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function () {
+            done();
+          });
+        });
+      });
+      describe('call `path` method parameter check', function () {
+        describe('with no specific parameter', function () {
+          it('should be `success`', function (done) {
+            cdb.path();
+            done();
+          });
+        });
+        describe('with specific `object`', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              cdb.path({ key: 1 });
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+        describe('with specific parameter not object', function () {
+          it('should occured `TypeError` exception', function (done) {
+            try {
+              cdb.path(1);
+            } catch (e) {
+              e.should.be.an.instanceOf(TypeError);
+              done();
+            }
+          });
+        });
+      });
+      describe('when call `path` method', function () {
+        it('should be get `path.kch`', function (done) {
+          cdb.path(function (err, name) {
+            if (err) { return done(err); }
+            name.should.eql('path.kch');
+            done();
+          });
+        });
+      });
+    });
+
+
+    // 
     // status
     //
     describe('db not open', function () {
@@ -5591,6 +5661,7 @@ describe('DB class tests', function () {
         });
       });
     });
+
 
 
   });

@@ -38,6 +38,7 @@ class PolyDBWrap : public ObjectWrap {
     static Handle<Value> Cas(const Arguments &args);
     static Handle<Value> Count(const Arguments &args);
     static Handle<Value> Size(const Arguments &args);
+    static Handle<Value> Path(const Arguments &args);
     static Handle<Value> Status(const Arguments &args);
     static Handle<Value> Check(const Arguments &args);
     static Handle<Value> GetBulk(const Arguments &args);

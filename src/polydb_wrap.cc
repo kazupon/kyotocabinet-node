@@ -420,6 +420,7 @@ enum kc_req_type {
   KC_CAS,
   KC_COUNT,
   KC_SIZE,
+  KC_PATH,
   KC_STATUS,
   KC_CHECK,
   KC_GET_BULK,
@@ -505,6 +506,12 @@ typedef struct kc_strmap_ret_req_t {
   KC_REQ_FIELD
   StringMap *ret;
 } kc_strmap_ret_req_t;
+
+// char value request
+typedef struct kc_char_ret_req_t {
+  KC_REQ_FIELD
+  char *ret;
+} kc_char_ret_req_t;
 
 // check request
 typedef struct kc_check_req_t {
@@ -1175,6 +1182,7 @@ Handle<Value> PolyDBWrap::Cas(const Arguments &args) {
 
 DEFINE_RET_FUNC(Count, KC_COUNT, kc_ret_req_t, -1);
 DEFINE_RET_FUNC(Size, KC_SIZE, kc_ret_req_t, -1);
+DEFINE_RET_FUNC(Path, KC_PATH, kc_char_ret_req_t, NULL);
 DEFINE_RET_FUNC(Status, KC_STATUS, kc_strmap_ret_req_t, NULL);
 
 Handle<Value> PolyDBWrap::Check(const Arguments &args) {
@@ -2340,6 +2348,18 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       { DO_RET_EXECUTE(count, work_req); break; }
     case KC_SIZE:
       { DO_RET_EXECUTE(size, work_req); break; }
+    case KC_PATH:
+      {
+        kc_char_ret_req_t *char_ret_req = static_cast<kc_char_ret_req_t*>(work_req->data);
+        const std::string &path = db->path();
+        TRACE("path = %s\n", path.c_str());
+        if (path.size() > 0) {
+          char_ret_req->ret = kc::strdup(path.c_str());
+        } else {
+          char_ret_req->result = db->error().code();
+        }
+        break;
+      }
     case KC_STATUS:
       {
         kc_strmap_ret_req_t *strmap_ret_req = static_cast<kc_strmap_ret_req_t*>(work_req->data);
@@ -2565,6 +2585,14 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         argv[argc++] = Number::New(ret_req->ret);
         break;
       }
+    case KC_PATH:
+      {
+        if (req->result == PolyDB::Error::SUCCESS) {
+          kc_char_ret_req_t *char_ret_req = static_cast<kc_char_ret_req_t*>(work_req->data);
+          argv[argc++] = String::New(char_ret_req->ret);
+        }
+        break;
+      }
     case KC_STATUS:
       {
         if (req->result == PolyDB::Error::SUCCESS) {
@@ -2660,6 +2688,13 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         kc_strmap_ret_req_t *strmap_ret_req = static_cast<kc_strmap_ret_req_t*>(work_req->data);
         SAFE_REQ_ATTR_DELETE(strmap_ret_req, ret);
         free(strmap_ret_req);
+        break;
+      }
+    case KC_PATH:
+      { 
+        kc_char_ret_req_t *ret_req = static_cast<kc_char_ret_req_t*>(work_req->data);
+        SAFE_REQ_ATTR_FREE(ret_req, ret);
+        free(ret_req);
         break;
       }
     case KC_SET:
@@ -2822,6 +2857,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("cas"), FunctionTemplate::New(Cas)->GetFunction());
   prottpl->Set(String::NewSymbol("count"), FunctionTemplate::New(Count)->GetFunction());
   prottpl->Set(String::NewSymbol("size"), FunctionTemplate::New(Size)->GetFunction());
+  prottpl->Set(String::NewSymbol("path"), FunctionTemplate::New(Path)->GetFunction());
   prottpl->Set(String::NewSymbol("status"), FunctionTemplate::New(Status)->GetFunction());
   prottpl->Set(String::NewSymbol("check"), FunctionTemplate::New(Check)->GetFunction());
   prottpl->Set(String::NewSymbol("get_bulk"), FunctionTemplate::New(GetBulk)->GetFunction());
