@@ -438,6 +438,7 @@ enum kc_req_type {
   KC_BEGIN_TRANSACTION,
   KC_END_TRANSACTION,
   KC_SYNCHRONIZE,
+  KC_OCCUPY,
 };
 
 // common request field
@@ -724,7 +725,6 @@ public:
   ~InternalFileProcessor() {
     TRACE("destor\n");
   }
-
 private:
   bool process(const std::string &path, int64_t count, int64_t size) {
     HandleScope scope;
@@ -2117,6 +2117,124 @@ Handle<Value> PolyDBWrap::Synchronize(const Arguments &args) {
   }
 }
 
+Handle<Value> PolyDBWrap::Occupy(const Arguments &args) {
+  TRACE("Occupy\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> proc_sym = String::NewSymbol("proc");
+  Local<String> writable_sym = String::NewSymbol("writable");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsObject()) & !args[0]->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym) && !args[0]->ToObject()->Get(proc_sym)->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ||
+       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym) && !args[0]->ToObject()->Get(proc_sym)->IsFunction()) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  if ((args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym)) ||
+      (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym))) {
+
+    PolyDB::Error::Code result = PolyDB::Error::SUCCESS;
+    Local<Function> cb;
+    bool writable = false;
+    Local<Function> proc;
+    cb.Clear();
+    proc.Clear();
+
+    if (args.Length() == 1) {
+      if (args[0]->IsFunction()) {
+        cb = Local<Function>::New(Handle<Function>::Cast(args[0]));
+      } else if (args[0]->IsObject()) {
+        if (args[0]->ToObject()->Has(proc_sym)) {
+          proc = Local<Function>::New(Handle<Function>::Cast(args[0]->ToObject()->Get(proc_sym)));
+        }
+        if (args[0]->ToObject()->Has(writable_sym)) {
+          writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+        }
+      }
+    } else {
+      if (args[0]->ToObject()->Has(proc_sym)) {
+        proc = Local<Function>::New(Handle<Function>::Cast(args[0]->ToObject()->Get(proc_sym)));
+      }
+      if (args[0]->ToObject()->Has(writable_sym)) {
+        writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+      }
+      cb = Local<Function>::New(Handle<Function>::Cast(args[1]));
+    }
+    
+    // TODO: should be non-blocking implements ...
+    // execute
+    InternalFileProcessor _proc(proc);
+    if (!obj->db_->occupy(writable, &_proc)) {
+      result = obj->db_->error().code();
+    }
+
+    // init callback arguments.
+    Local<Value> argv[1] = { 
+      Local<Value>::New(Null()),
+    };
+
+    // set error to callback arguments.
+    if (result != PolyDB::Error::SUCCESS) {
+      const char *name = PolyDB::Error::codename(result);
+      Local<String> message = String::NewSymbol(name);
+      Local<Value> err = Exception::Error(message);
+      Local<Object> obj = err->ToObject();
+      obj->Set(String::NewSymbol("code"), Integer::New(result), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
+      argv[0] = err;
+    }
+
+    // execute callback
+    if (!cb.IsEmpty()) {
+      TryCatch try_catch;
+      MakeCallback(obj->handle_, cb, 1, argv);
+      if (try_catch.HasCaught()) {
+        FatalException(try_catch);
+      }
+    } 
+
+    return scope.Close(args.This());
+  } else {
+
+    kc_boolean_cmn_req_t *req = (kc_boolean_cmn_req_t *)malloc(sizeof(kc_boolean_cmn_req_t));
+    req->type = KC_SYNCHRONIZE;
+    req->result = PolyDB::Error::SUCCESS;
+    req->wrapdb = obj;
+    req->flag = false;
+    req->cb.Clear();
+
+    if (args.Length() == 1) {
+      if (args[0]->IsFunction()) {
+        req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+      } else if (args[0]->IsObject()) {
+        if (args[0]->ToObject()->Has(writable_sym)) {
+          req->flag = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+        }
+      }
+    } else {
+      if (args[0]->ToObject()->Has(writable_sym)) {
+        req->flag = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+      }
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+    }
+
+    uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+    uv_req->data = req;
+
+    int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+    TRACE("uv_queue_work: ret=%d\n", ret);
+
+    obj->Ref();
+    return args.This();
+  }
+}
+
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -2357,6 +2475,15 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
         kc_boolean_cmn_req_t *sync_req = static_cast<kc_boolean_cmn_req_t*>(work_req->data);
         TRACE("synchronize: hard = %d\n", sync_req->flag);
         if (!db->synchronize(sync_req->flag, NULL)) {
+          req->result = db->error().code();
+        }
+        break;
+      }
+    case KC_OCCUPY:
+      {
+        kc_boolean_cmn_req_t *sync_req = static_cast<kc_boolean_cmn_req_t*>(work_req->data);
+        TRACE("occupy: writable = %d\n", sync_req->flag);
+        if (!db->occupy(sync_req->flag, NULL)) {
           req->result = db->error().code();
         }
         break;
@@ -2654,6 +2781,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       }
       */
     case KC_SYNCHRONIZE:
+    case KC_OCCUPY:
       {
         kc_boolean_cmn_req_t *bool_req = static_cast<kc_boolean_cmn_req_t*>(work_req->data);
         free(bool_req);
@@ -2712,6 +2840,7 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("begin_transaction"), FunctionTemplate::New(BeginTransaction)->GetFunction());
   prottpl->Set(String::NewSymbol("end_transaction"), FunctionTemplate::New(EndTransaction)->GetFunction());
   prottpl->Set(String::NewSymbol("synchronize"), FunctionTemplate::New(Synchronize)->GetFunction());
+  prottpl->Set(String::NewSymbol("occupy"), FunctionTemplate::New(Occupy)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);
