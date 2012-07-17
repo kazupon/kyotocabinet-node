@@ -50,6 +50,7 @@ class PolyDBWrap : public ObjectWrap {
     static Handle<Value> Merge(const Arguments &args);
     static Handle<Value> DumpSnapshot(const Arguments &args);
     static Handle<Value> LoadSnapshot(const Arguments &args);
+    static Handle<Value> Accept(const Arguments &args);
 
     static Persistent<FunctionTemplate> ctor;
     static Persistent<String> code_symbol;

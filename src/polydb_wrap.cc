@@ -367,6 +367,7 @@ enum kc_req_type {
   KC_MERGE,
   KC_DUMP_SNAPSHOT,
   KC_LOAD_SNAPSHOT,
+  KC_ACCEPT,
 };
 
 // common request field
@@ -498,6 +499,137 @@ typedef struct kc_merge_req_t {
   int32_t srcnum;
   uint32_t mode;
 } kc_merge_req_t;
+
+// accept request
+typedef struct kc_accept_req_t {
+  KC_REQ_FIELD
+  char *key;
+  Persistent<Object> visitor;
+  bool writable;
+} kc_accept_req_t;
+
+
+class InternalVisitor : public PolyDB::Visitor {
+public:
+  Persistent<Object> &visitor_;
+  bool writable_;
+
+  explicit InternalVisitor(Persistent<Object> &visitor, bool writable) :
+    visitor_(visitor), writable_(writable) {
+    TRACE("ctor\n");
+  }
+private:
+  const char* visit_full(const char *kbuf, size_t ksiz,
+                         const char *vbuf, size_t vsiz, size_t *sp) {
+    HandleScope scope;
+    TRACE("arguments: kbuf = %s, ksiz = %d, vbuf = %s, vsiz = %d, sp = %d\n", kbuf, ksiz, vbuf, vsiz, *sp);
+
+    const char *rv = NOP;
+    Local<Value> ret;
+    Local<String> method_name = String::NewSymbol("visit_full");
+    Local<Function> cb;
+    if (!visitor_->IsFunction()) {
+      if (!visitor_->ToObject()->Has(method_name) 
+          && !visitor_->ToObject()->Get(method_name)->IsFunction()) {
+        rv = NOP;
+      }
+      cb = Local<Function>::New(Handle<Function>::Cast(visitor_->ToObject()->Get(method_name)));
+    } else {
+      cb = Local<Function>::New(Handle<Function>::Cast(visitor_));
+    }
+
+    if (!cb.IsEmpty()) {
+      Local<Value> argv[2] = { 
+        String::New(kbuf, ksiz),
+        String::New(vbuf, vsiz),
+      };
+      TryCatch try_catch;
+      ret = cb->Call(Context::GetCurrent()->Global(), 2, argv);
+      if (try_catch.HasCaught()) {
+        FatalException(try_catch);
+      }
+
+      if (!ret.IsEmpty()) {
+        if (ret->IsNumber()) {
+          int64_t num_ret = ret->IntegerValue();
+          if (num_ret == 1) {
+            rv = REMOVE;
+          }
+        } else if (ret->IsString()) {
+          String::Utf8Value str_ret(ret->ToString());
+          if (*str_ret) {
+            rv = *str_ret;
+            //rv = kc::strdup(*str_ret);
+            *sp = strlen(*str_ret);
+          }
+        }
+      }
+    }
+    
+    if (!writable_) {
+      rv = NULL;
+    }
+    return rv;
+  }
+  const char* visit_empty(const char *kbuf, size_t ksiz, size_t *sp) {
+    HandleScope scope;
+    TRACE("arguments: kbuf = %s, ksiz = %d, sp = %d\n", kbuf, ksiz, *sp);
+
+    const char *rv = NOP;
+    Local<Value> ret;
+    Local<String> method_name = String::NewSymbol("visit_empty");
+    Local<Function> cb;
+    if (!visitor_->IsFunction()) {
+      if (!visitor_->ToObject()->Has(method_name) 
+          && !visitor_->ToObject()->Get(method_name)->IsFunction()) {
+        rv = NOP;
+      }
+      cb = Local<Function>::New(Handle<Function>::Cast(visitor_->ToObject()->Get(method_name)));
+    } else {
+      cb = Local<Function>::New(Handle<Function>::Cast(visitor_));
+    }
+
+    if (!cb.IsEmpty()) {
+      Local<Value> argv[1] = { 
+        String::New(kbuf, ksiz),
+      };
+      TryCatch try_catch;
+      ret = cb->Call(Context::GetCurrent()->Global(), 1, argv);
+      if (try_catch.HasCaught()) {
+        FatalException(try_catch);
+      }
+
+      if (!ret.IsEmpty()) {
+        if (ret->IsNumber()) {
+          int64_t num_ret = ret->IntegerValue();
+          if (num_ret == 1) {
+            rv = REMOVE;
+          }
+        } else if (ret->IsString()) {
+          String::Utf8Value str_ret(ret->ToString());
+          if (*str_ret) {
+            rv = *str_ret;
+            //rv = kc::strdup(*str_ret);
+            *sp = strlen(*str_ret);
+          }
+        }
+      }
+    }
+
+    if (!writable_) {
+      rv = NULL;
+    }
+    return rv;
+  }
+  /*
+  void visit_before() {
+    TRACE("call visit_before\n");
+  }
+  void visit_after() {
+    TRACE("call visit_after\n");
+  }
+  */
+};
 
 
 StringVector* Array2Vector(const Local<Value> obj) {
@@ -1446,6 +1578,120 @@ Handle<Value> PolyDBWrap::Merge(const Arguments &args) {
 DEFINE_CHAR_PARAM_FUNC(DumpSnapshot, KC_DUMP_SNAPSHOT);
 DEFINE_CHAR_PARAM_FUNC(LoadSnapshot, KC_LOAD_SNAPSHOT);
 
+Handle<Value> PolyDBWrap::Accept(const Arguments &args) {
+  TRACE("Accept\n");
+  HandleScope scope;
+
+  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
+  assert(obj != NULL);
+
+  Local<String> key_sym = String::NewSymbol("key");
+  Local<String> visitor_sym = String::NewSymbol("visitor");
+  Local<String> writable_sym = String::NewSymbol("writable");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ||
+       (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_accept_req_t *req = (kc_accept_req_t *)malloc(sizeof(kc_accept_req_t));
+  req->type = KC_ACCEPT;
+  req->result = PolyDB::Error::SUCCESS;
+  req->wrapdb = obj;
+  req->cb.Clear();
+  req->key = NULL;
+  req->visitor.Clear();
+  req->writable = true;
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
+      if (args[0]->ToObject()->Has(key_sym)) {
+        String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
+        req->key = kc::strdup(*key);
+      }
+      if (args[0]->ToObject()->Has(visitor_sym)) {
+        req->visitor = Persistent<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+      }
+      if (args[0]->ToObject()->Has(writable_sym)) {
+        req->writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+      }
+    }
+  } else {
+    if (args[0]->ToObject()->Has(key_sym)) {
+      String::Utf8Value key(args[0]->ToObject()->Get(key_sym));
+      req->key = kc::strdup(*key);
+    }
+    if (args[0]->ToObject()->Has(visitor_sym)) {
+      req->visitor = Persistent<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+    }
+    if (args[0]->ToObject()->Has(writable_sym)) {
+      req->writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+    }
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+  
+  // TODO' should be non-blocking implements ...
+  // execute
+  if (req->key == NULL || req->visitor.IsEmpty()) {
+    req->result = PolyDB::Error::INVALID;
+  } else {
+    InternalVisitor visitor(req->visitor, req->writable);
+    if (!obj->db_->accept(req->key, strlen(req->key), &visitor, req->writable)) {
+      req->result = obj->db_->error().code();
+    }
+  }
+
+  // init callback arguments.
+  Local<Value> argv[1] = { 
+    Local<Value>::New(Null()),
+  };
+
+  // set error to callback arguments.
+  if (req->result != PolyDB::Error::SUCCESS) {
+    const char *name = PolyDB::Error::codename(req->result);
+    Local<String> message = String::NewSymbol(name);
+    Local<Value> err = Exception::Error(message);
+    Local<Object> obj = err->ToObject();
+    obj->Set(String::NewSymbol("code"), Integer::New(req->result), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
+    argv[0] = err;
+  }
+
+
+  // execute callback
+  if (!req->cb.IsEmpty()) {
+    TryCatch try_catch;
+    MakeCallback(obj->handle_, req->cb, 1, argv);
+    if (try_catch.HasCaught()) {
+      FatalException(try_catch);
+    }
+  } 
+
+  req->cb.Dispose();
+  req->wrapdb = NULL;
+
+  SAFE_REQ_ATTR_FREE(req, key);
+  free(req);
+  /*
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  */
+  return scope.Close(args.This());
+}
+
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -1659,6 +1905,24 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       { DO_CHAR_PARAM_CMN_EXECUTE(dump_snapshot, work_req); break; }
     case KC_LOAD_SNAPSHOT:
       { DO_CHAR_PARAM_CMN_EXECUTE(load_snapshot, work_req); break; }
+      /*
+    case KC_ACCEPT:
+      {
+        kc_accept_req_t *accept_req = static_cast<kc_accept_req_t*>(work_req->data);
+        TRACE("accept: key = %s, visitor = %p, writable = %d\n", accept_req->key, &accept_req->visitor, accept_req->writable);
+        if (accept_req->key == NULL || accept_req->visitor.IsEmpty()) {
+          req->result = PolyDB::Error::INVALID;
+        } else {
+          InternalVisitor visitor(accept_req->visitor, accept_req->writable);
+          TRACE("accept...\n");
+          if (!db->accept(accept_req->key, strlen(accept_req->key), &visitor, accept_req->writable)) {
+            req->result = db->error().code();
+          }
+          TRACE("done accept\n");
+        }
+        break;
+      }
+      */
     default:
       assert(0);
   }
@@ -1935,6 +2199,15 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
         free(path_req);
         break;
       }
+      /*
+    case KC_ACCEPT:
+      {
+        kc_accept_req_t *accept_req = static_cast<kc_accept_req_t*>(work_req->data);
+        SAFE_REQ_ATTR_FREE(accept_req, key);
+        free(accept_req);
+        break;
+      }
+      */
     default:
       assert(0);
   }
@@ -1982,9 +2255,11 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("merge"), FunctionTemplate::New(Merge)->GetFunction());
   prottpl->Set(String::NewSymbol("dump_snapshot"), FunctionTemplate::New(DumpSnapshot)->GetFunction());
   prottpl->Set(String::NewSymbol("load_snapshot"), FunctionTemplate::New(LoadSnapshot)->GetFunction());
+  prottpl->Set(String::NewSymbol("accept"), FunctionTemplate::New(Accept)->GetFunction());
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);
+
   // define OpenMode
   ctor->Set(String::NewSymbol("OREADER"), Integer::New(PolyDB::OREADER), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
   ctor->Set(String::NewSymbol("OWRITER"), Integer::New(PolyDB::OWRITER), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
