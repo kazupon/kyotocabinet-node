@@ -7,6 +7,7 @@
 #include "kyotocabinet.h"
 #include "error_wrap.h"
 #include "visitor_wrap.h"
+#include "cursor_wrap.h"
 #include "polydb_wrap.h"
 
 using namespace v8;
@@ -15,6 +16,7 @@ using namespace v8;
 void Initialize (Handle<Object> target) {
   ErrorWrap::Init(target);
   VisitorWrap::Init(target);
+  CursorWrap::Init(target);
   PolyDBWrap::Init(target);
 }
 

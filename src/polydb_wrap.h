@@ -18,7 +18,11 @@ using namespace kyotocabinet;
 class PolyDBWrap : public ObjectWrap {
   public:
     static void Init(Handle<Object> target);
+    PolyDB::Cursor* Cursor();
+
   private:
+    PolyDB *db_;
+
     PolyDBWrap();
     ~PolyDBWrap();
 
@@ -59,15 +63,10 @@ class PolyDBWrap : public ObjectWrap {
     static Handle<Value> Synchronize(const Arguments &args);
     static Handle<Value> Occupy(const Arguments &args);
 
-    static Persistent<FunctionTemplate> ctor;
-    static Persistent<String> code_symbol;
-
     static void OnWork(uv_work_t *work_req);
     static void OnWorkDone(uv_work_t *work_req);
 
     Local<Value> MakeErrorObject(PolyDB::Error::Code result);
-
-    PolyDB *db_;
 };
 
 #endif /* POLYDB_WRAP_H */

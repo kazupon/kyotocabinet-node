@@ -8,6 +8,7 @@ var log = console.log;
 var checkConstants = require('./macro').checkConstants;
 var kc = require('../lib/kyotocabinet');
 var DB = kc.DB;
+var Cursor = kc.Cursor;
 var Visitor = kc.Visitor;
 var Error = kc.Error;
 
@@ -5662,6 +5663,43 @@ describe('DB class tests', function () {
       });
     });
 
+
+    // 
+    // cursor
+    //
+    describe('db not open', function () {
+      it('should exist', function (done) {
+        should.exist(new DB().cursor);
+        done();
+      });
+    });
+    describe('db open', function () {
+      var cdb;
+      var fname = 'cursor.kct';
+      before(function (done) {
+        cdb = new DB();
+        cdb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        cdb.close(function (err) {
+          if (err) { return done(err); }
+          fs.unlink(fname, function () {
+            done();
+          });
+        });
+      });
+      it('should be exist', function (done) {
+        cdb.cursor.should.be.a.ok;
+        done();
+      });
+      it('should be an instance of `Cursor`', function (done) {
+        cdb.cursor.should.be.an.instanceOf(Cursor);
+        done();
+      });
+    });
 
 
   });

@@ -28,6 +28,7 @@
             './src/debug.c',
             './src/error_wrap.cc',
             './src/visitor_wrap.cc',
+            './src/cursor_wrap.cc',
             './src/polydb_wrap.cc',
             './src/kyotocabinet.cc'
         ],
