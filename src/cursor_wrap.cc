@@ -29,6 +29,20 @@ CursorWrap::~CursorWrap() {
 
 Handle<Value> CursorWrap::New(const Arguments &args) {
   HandleScope scope;
+  TRACE("New\n");
+
+  if ((args.Length() == 0)) {
+    ThrowException(Exception::Error(String::New("Invalid parameter")));
+    return args.This();
+  }
+
+  Local<String> ctor_sym = String::NewSymbol("constructor");
+  Local<String> name_sym = String::NewSymbol("name");
+  String::Utf8Value ctorName(args[0]->ToObject()->Get(ctor_sym)->ToObject()->Get(name_sym)->ToString());
+  if (strcmp("DB", *ctorName)) {
+    ThrowException(Exception::TypeError(String::New("Invalid parameter")));
+    return args.This();
+  }
   
   PolyDBWrap *dbWrap = ObjectWrap::Unwrap<PolyDBWrap>(args[0]->ToObject());
   CursorWrap *cursorWrap = new CursorWrap(dbWrap->Cursor());
