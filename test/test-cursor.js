@@ -19,7 +19,7 @@ var Cursor = kc.Cursor;
 describe('Cursor class tests', function () {
 
   // 
-  // constructor
+  // create cursor object (sync)
   //
   describe('constructor', function () {
     var db = new DB();
@@ -88,6 +88,77 @@ describe('Cursor class tests', function () {
       });
     });
   });
+
+
+  // 
+  // create cursor object (async)
+  //
+  describe('create', function () {
+    var db = new DB();
+    describe('db not open', function () {
+      it('cursor object should be created', function (done) {
+        Cursor.create(db, function (err, cur) {
+          if (err) { return done(err); }
+          cur.should.be.a.ok;
+          cur.should.be.an.instanceOf(Cursor);
+          done();
+        });
+      });
+    });
+    describe('db open', function () {
+      before(function (done) {
+        db.open(function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        db.close(function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      it('cursor object should be created', function (done) {
+        Cursor.create(db, function (err, cur) {
+          if (err) { return done(err); }
+          cur.should.be.a.ok;
+          cur.should.be.an.instanceOf(Cursor);
+          done();
+        });
+      });
+    });
+    describe('no specific db object', function () {
+      it('cursor object should not be created', function (done) {
+        try {
+          Cursor.create(function (err, cur) {});
+        } catch (e) {
+          e.should.be.an.instanceOf(Error);
+        }
+        done();
+      });
+    });
+    describe('specific not db object', function () {
+      it('cursor object should not be created', function (done) {
+        try {
+          Cursor.create({}, function (err, cur) {});
+        } catch (e) {
+          e.should.be.an.instanceOf(Error);
+        }
+        done();
+      });
+    });
+    describe('specific primitive value', function () {
+      it('cursor object should not be created', function (done) {
+        try {
+          Cursor.create(1, function (err, cur) {});
+        } catch (e) {
+          e.should.be.an.instanceOf(Error);
+        }
+        done();
+      });
+    });
+  });
+
 
 });
 

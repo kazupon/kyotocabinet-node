@@ -16,7 +16,10 @@ using namespace kyotocabinet;
 
 class CursorWrap : public ObjectWrap {
   public:
+    static Persistent<Function> ctor;
+
     static void Init(Handle<Object> target);
+
   private:
     PolyDB::Cursor *cursor_;
 
@@ -24,7 +27,13 @@ class CursorWrap : public ObjectWrap {
     ~CursorWrap();
 
     static Handle<Value> New(const Arguments &args);
+    static Handle<Value> Create(const Arguments &args);
     static Handle<Value> Get(const Arguments &args);
+
+    static void OnWork(uv_work_t *work_req);
+    static void OnWorkDone(uv_work_t *work_req);
+
+    Local<Value> MakeErrorObject(PolyDB::Error::Code result);
 };
 
 #endif /* CURSOR_WRAP_H */

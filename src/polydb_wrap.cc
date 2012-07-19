@@ -2250,16 +2250,6 @@ Handle<Value> PolyDBWrap::Occupy(const Arguments &args) {
   }
 }
 
-Handle<Value> GetCursor(Local<String> property, const AccessorInfo &info) {
-  PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(info.Holder());
-  assert(obj != NULL);
-
-  //CursorWrap *obj = new PolyDBWrap();
-  //obj->Wrap(args.This());
-
-  return Undefined();
-}
-
 
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -2894,8 +2884,6 @@ void PolyDBWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("end_transaction"), FunctionTemplate::New(EndTransaction)->GetFunction());
   prottpl->Set(String::NewSymbol("synchronize"), FunctionTemplate::New(Synchronize)->GetFunction());
   prottpl->Set(String::NewSymbol("occupy"), FunctionTemplate::New(Occupy)->GetFunction());
-
-  //prottpl->SetAccessor(String::NewSymbol("cursor"), GetCursor);
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);
