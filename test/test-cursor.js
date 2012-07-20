@@ -244,6 +244,121 @@ describe('Cursor class tests', function () {
     });
   });
 
+
+  //
+  // jump_back (async)
+  //
+  describe('jump_back', function () {
+    describe('db not open', function () {
+      it('operation should be failed', function (done) {
+        Cursor.create(new DB(), function (err, cur) {
+          if (err) { return done(err); }
+          cur.jump_back(function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+    });
+    describe('db open', function () {
+      describe('jump back not support', function () {
+        var db;
+        before(function (done) {
+          db = new DB();
+          db.open({ path: '-', mode: DB.OWRITER + DB.OCREATE }, function (err) {
+            if (err) { return done(err); }
+            db.set({ key: 'key1', value: 'hello' }, function (err) {
+              if (err) { return done(err); }
+              db.set({ key: 'key2', value: 'world' }, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+          });
+        });
+        after(function (done) {
+          db.close(function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        it('operation should be failed', function (done) {
+          Cursor.create(new DB(), function (err, cur) {
+            if (err) { return done(err); }
+            cur.jump_back(function (err) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.INVALID);
+              done();
+            });
+          });
+        });
+      });
+      describe('jump back support', function () {
+        var db;
+        var cur;
+        before(function (done) {
+          db = new DB();
+          db.open({ path: '+', mode: DB.OWRITER + DB.OCREATE }, function (err) {
+            if (err) { return done(err); }
+            db.set({ key: 'key1', value: 'hello' }, function (err) {
+              if (err) { return done(err); }
+              db.set({ key: 'key2', value: 'world' }, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+          });
+        });
+        after(function (done) {
+          db.close(function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        beforeEach(function (done) {
+          Cursor.create(db, function (err, c) {
+            if (err) { return done(err); }
+            cur = c;
+            done();
+          });
+        });
+        afterEach(function (done) {
+          cur = null;
+          done();
+        });
+        describe('jump back to record head', function () {
+          it('operation should be success', function (done) {
+            cur.jump(function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        describe('jump back to specific `key` record', function () {
+          it('operation should be success', function (done) {
+            cur.jump_back('key1', function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        describe('parameter check', function () {
+          describe('specific `key` is not string type', function () {
+            it('operation should be occured exception', function (done) {
+              try {
+                cur.jump_back(111, function (err) {});
+              } catch (e) {
+                error(e);
+                done();
+              }
+            });
+          });
+        });
+      });
+    });
+  });
+
   //
   // get (async)
   //

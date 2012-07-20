@@ -20,6 +20,7 @@ namespace kc = kyotocabinet;
 enum kc_cur_req_type {
   KC_CUR_CREATE,
   KC_CUR_JUMP,
+  KC_CUR_JUMP_BACK,
   KC_CUR_GET,
 };
 
@@ -199,6 +200,54 @@ Handle<Value> CursorWrap::Jump(const Arguments &args) {
   return args.This();
 }
 
+Handle<Value> CursorWrap::JumpBack(const Arguments &args) {
+  HandleScope scope;
+  TRACE("JumpBack\n");
+
+  CursorWrap *wrapCur = ObjectWrap::Unwrap<CursorWrap>(args.This());
+  assert(wrapCur != NULL);
+
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsString() & !args[0]->IsFunction())) ||
+       (args.Length() == 2 && (!args[0]->IsString() | !args[1]->IsFunction())) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  req->type = KC_CUR_JUMP_BACK;
+  req->wrapcur = wrapCur;
+  req->result = PolyDB::Error::SUCCESS;
+  req->key = NULL;
+  req->value = NULL;
+  req->step = false;
+  req->writable = false;
+  req->cb.Clear();
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else {
+      String::Utf8Value key(args[0]->ToString());
+      req->key = kc::strdup(*key);
+    }
+  } else {
+    String::Utf8Value key(args[0]->ToString());
+    req->key = kc::strdup(*key);
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  wrapCur->Ref();
+
+  return args.This();
+}
+
 /*
 Handle<Value> CursorWrap::Get(const Arguments &args) {
   HandleScope scope;
@@ -255,6 +304,21 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
           }
         } else {
           if (!wrapCur->cursor_->jump(cur_req->key, strlen(cur_req->key))) {
+            cur_req->result = wrapCur->GetErrorCode();
+          }
+        }
+        break;
+      }
+    case KC_CUR_JUMP_BACK:
+      {
+        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        CursorWrap *wrapCur = cur_req->wrapcur;
+        if (cur_req->key == NULL) {
+          if (!wrapCur->cursor_->jump_back()) {
+            cur_req->result = wrapCur->GetErrorCode();
+          }
+        } else {
+          if (!wrapCur->cursor_->jump_back(cur_req->key, strlen(cur_req->key))) {
             cur_req->result = wrapCur->GetErrorCode();
           }
         }
@@ -383,6 +447,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
         break;
       }
     case KC_CUR_JUMP:
+    case KC_CUR_JUMP_BACK:
       {
         kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(cur_req, key);
@@ -420,6 +485,7 @@ void CursorWrap::Init(Handle<Object> target) {
   // prototype(s)
   Local<ObjectTemplate> prottpl = tpl->PrototypeTemplate();
   prottpl->Set(String::NewSymbol("jump"), FunctionTemplate::New(Jump)->GetFunction());
+  prottpl->Set(String::NewSymbol("jump_back"), FunctionTemplate::New(JumpBack)->GetFunction());
   //prottpl->Set(String::NewSymbol("get"), FunctionTemplate::New(Get)->GetFunction());
 
   ctor = Persistent<Function>::New(tpl->GetFunction());
