@@ -26,19 +26,19 @@ class CursorWrap : public ObjectWrap {
     PolyDBWrap *wrapdb_;
     PolyDB::Cursor *cursor_;
 
-    //CursorWrap(PolyDBWrap *wrapdb);
     CursorWrap(PolyDB::Cursor *cursor);
     ~CursorWrap();
 
     static Handle<Value> New(const Arguments &args);
     static Handle<Value> Create(const Arguments &args);
+    static Handle<Value> Jump(const Arguments &args);
     static Handle<Value> Get(const Arguments &args);
 
     static void OnWork(uv_work_t *work_req);
     static void OnWorkDone(uv_work_t *work_req);
 
     void SetWrapDB(PolyDBWrap *wrapdb);
-    Local<Value> MakeErrorObject(PolyDB::Error::Code result);
+    PolyDB::Error::Code GetErrorCode();
 };
 
 #endif /* CURSOR_WRAP_H */

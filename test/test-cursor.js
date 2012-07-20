@@ -9,6 +9,7 @@ var assert = require('assert');
 var checkConstants = require('./macro').checkConstants;
 var kc = require('../lib/kyotocabinet');
 var DB = kc.DB;
+var Error = kc.Error;
 var Cursor = kc.Cursor;
 
 
@@ -132,9 +133,10 @@ describe('Cursor class tests', function () {
         try {
           Cursor.create(function (err, cur) {});
         } catch (e) {
-          e.should.be.an.instanceOf(Error);
+          //e.should.be.an.instanceOf(Error);
+          error(e);
+          done();
         }
-        done();
       });
     });
     describe('specific not db object', function () {
@@ -142,9 +144,10 @@ describe('Cursor class tests', function () {
         try {
           Cursor.create({}, function (err, cur) {});
         } catch (e) {
-          e.should.be.an.instanceOf(Error);
+          //e.should.be.an.instanceOf(Error);
+          error(e);
+          done();
         }
-        done();
       });
     });
     describe('specific primitive value', function () {
@@ -152,12 +155,170 @@ describe('Cursor class tests', function () {
         try {
           Cursor.create(1, function (err, cur) {});
         } catch (e) {
-          e.should.be.an.instanceOf(Error);
+          //e.should.be.an.instanceOf(Error);
+          error(e);
+          done();
         }
-        done();
       });
     });
   });
+
+  
+  //
+  // jump (async)
+  //
+  describe('jump', function () {
+    describe('db not open', function () {
+      it('operation should be failed', function (done) {
+        Cursor.create(new DB(), function (err, cur) {
+          if (err) { return done(err); }
+          cur.jump(function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+    });
+    describe('db open', function () {
+      var db;
+      var cur;
+      before(function (done) {
+        db = new DB();
+        db.open({ path: '+', mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          db.set({ key: 'key1', value: 'hello' }, function (err) {
+            if (err) { return done(err); }
+            db.set({ key: 'key2', value: 'world' }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+      });
+      after(function (done) {
+        db.close(function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      beforeEach(function (done) {
+        Cursor.create(db, function (err, c) {
+          if (err) { return done(err); }
+          cur = c;
+          done();
+        });
+      });
+      afterEach(function (done) {
+        cur = null;
+        done();
+      });
+      describe('jump to record head', function () {
+        it('operation should be success', function (done) {
+          cur.jump(function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+      });
+      describe('jump to specific `key` record', function () {
+        it('operation should be success', function (done) {
+          cur.jump('key2', function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+      });
+      describe('parameter check', function () {
+        describe('specific `key` is not string type', function () {
+          it('operation should be occured exception', function (done) {
+            try {
+              cur.jump(111, function (err) {});
+            } catch (e) {
+              error(e);
+              done();
+            }
+          });
+        });
+      });
+    });
+  });
+
+  //
+  // get (async)
+  //
+  /*
+  describe('get', function () {
+    describe('db not open', function () {
+      it('operation should be failed', function (done) {
+        Cursor.create(new DB(), function (err, cur) {
+          if (err) { return done(err); }
+          cur.get(function (err, rec) {
+            should.not.exist(rec);
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+    });
+    describe('cursor not support db', function () {
+      var db;
+      before(function (done) {
+        db = new DB();
+        db.open({ path: '+', mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          db.set({ key: 'key1', value: 'hello' }, function (err) {
+            if (err) { return done(err); }
+            db.set({ key: 'key2', value: 'world' }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+      });
+      after(function (done) {
+        db.clear(function (err) {
+          if (err) { return done(err); }
+          db.close(function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+      });
+      it('operation should be failed', function (done) {
+        Cursor.create(db, function (err, cur) {
+          if (err) { return done(err); }
+          cur.get(function (err, rec) {
+            console.log(err);
+            should.not.exist(rec);
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+    });
+    describe('cursor support db', function () {
+      describe('no record', function () {
+      });
+      describe('two records', function () {
+        describe('move cursor', function () {
+          describe('first call', function () {
+          });
+          describe('second call', function () {
+          });
+        });
+        describe('no move cursor', function () {
+          describe('first call', function () {
+          });
+          describe('second call', function () {
+          });
+        });
+      });
+    });
+  });
+  */
 
 
 });

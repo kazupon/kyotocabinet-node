@@ -9,6 +9,7 @@
 #include "cursor_wrap.h"
 #include <assert.h>
 #include "debug.h"
+#include "utils.h"
 #include <kcdbext.h>
 #include <kcdb.h>
 
@@ -390,18 +391,6 @@ namespace kc = kyotocabinet;
       req->result = db->error().code();                                                     \
     }                                                                                       \
   }                                                                                         \
-
-#define SAFE_REQ_ATTR_FREE(Req, AttrName)   \
-  if (Req->AttrName != NULL) {              \
-    free(Req->AttrName);                    \
-    Req->AttrName = NULL;                   \
-  }                                         \
-
-#define SAFE_REQ_ATTR_DELETE(Req, AttrName)   \
-  if (Req->AttrName) {                        \
-    delete Req->AttrName;                     \
-    Req->AttrName = NULL;                     \
-  }                                           \
 
 
 // request type
