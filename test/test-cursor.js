@@ -213,7 +213,7 @@ describe('Cursor class tests', function () {
         cur = null;
         done();
       });
-      describe('jump to record head', function () {
+      describe('jump to head record', function () {
         it('operation should be success', function (done) {
           cur.jump(function (err) {
             if (err) { return done(err); }
@@ -230,6 +230,16 @@ describe('Cursor class tests', function () {
         });
       });
       describe('parameter check', function () {
+        describe('no specific', function () {
+          it('operation should be occured exception', function (done) {
+            try {
+              cur.jump();
+            } catch (e) {
+              error(e);
+              done();
+            }
+          });
+        });
         describe('specific `key` is not string type', function () {
           it('operation should be occured exception', function (done) {
             try {
@@ -327,7 +337,7 @@ describe('Cursor class tests', function () {
           cur = null;
           done();
         });
-        describe('jump back to record head', function () {
+        describe('jump back to last record', function () {
           it('operation should be success', function (done) {
             cur.jump(function (err) {
               if (err) { return done(err); }
@@ -344,6 +354,16 @@ describe('Cursor class tests', function () {
           });
         });
         describe('parameter check', function () {
+          describe('no specific', function () {
+            it('operation should be occured exception', function (done) {
+              try {
+                cur.jump_back();
+              } catch (e) {
+                error(e);
+                done();
+              }
+            });
+          });
           describe('specific `key` is not string type', function () {
             it('operation should be occured exception', function (done) {
               try {
@@ -420,7 +440,7 @@ describe('Cursor class tests', function () {
           });
         });
         describe('and step to next record', function () {
-          it('operation should be success', function (done) {
+          it('operation should be failed', function (done) {
             cur.step(function (err) {
               err.should.have.property('code');
               err.code.should.eql(Error.NOREC);
@@ -462,6 +482,145 @@ describe('Cursor class tests', function () {
       });
     });
   });
+
+
+  //
+  // step_back (async)
+  //
+  describe('step_back', function () {
+    describe('db not open', function () {
+      it('operation should be failed', function (done) {
+        Cursor.create(new DB(), function (err, cur) {
+          if (err) { return done(err); }
+          cur.step_back(function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+    });
+    describe('db open', function () {
+      describe('step back not support', function () {
+        var db;
+        before(function (done) {
+          db = new DB();
+          db.open({ path: '-', mode: DB.OWRITER + DB.OCREATE }, function (err) {
+            if (err) { return done(err); }
+            db.set({ key: 'key1', value: 'hello' }, function (err) {
+              if (err) { return done(err); }
+              db.set({ key: 'key2', value: 'world' }, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+          });
+        });
+        after(function (done) {
+          db.close(function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        it('operation should be failed', function (done) {
+          Cursor.create(new DB(), function (err, cur) {
+            if (err) { return done(err); }
+            cur.step_back(function (err) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.INVALID);
+              done();
+            });
+          });
+        });
+      });
+      describe('step back support', function () {
+        var db;
+        var cur;
+        before(function (done) {
+          db = new DB();
+          db.open({ path: '%', mode: DB.OWRITER + DB.OCREATE }, function (err) {
+            if (err) { return done(err); }
+            db.set({ key: 'key1', value: 'hello' }, function (err) {
+              if (err) { return done(err); }
+              db.set({ key: 'key2', value: 'world' }, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+          });
+        });
+        after(function (done) {
+          db.close(function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        beforeEach(function (done) {
+          Cursor.create(db, function (err, c) {
+            if (err) { return done(err); }
+            cur = c;
+            done();
+          });
+        });
+        afterEach(function (done) {
+          cur = null;
+          done();
+        });
+        describe('step back to prev record', function () {
+          it('operation should be success', function (done) {
+            cur.jump_back(function (err) {
+              if (err) { return done(err); }
+              cur.step_back(function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+          });
+          describe('and step back to prev record', function () {
+            it('operation should be failed', function (done) {
+              cur.step_back(function (err) {
+                err.should.have.property('code');
+                err.code.should.eql(Error.NOREC);
+                done();
+              });
+            });
+            describe('and step back to ...', function () {
+              it('operation should be failed', function (done) {
+                cur.step_back(function (err) {
+                  err.should.have.property('code');
+                  err.code.should.eql(Error.NOREC);
+                  done();
+                });
+              });
+            });
+          });
+        });
+        describe('parameter check', function () {
+          describe('no specific', function () {
+            it('operation should be occured exception', function (done) {
+              try {
+                cur.step_back();
+              } catch (e) {
+                error(e);
+                done();
+              }
+            });
+          });
+          describe('specific `key` is not string type', function () {
+            it('operation should be occured exception', function (done) {
+              try {
+                cur.step_back(111);
+              } catch (e) {
+                error(e);
+                done();
+              }
+            });
+          });
+        });
+      });
+    });
+  });
+
 
 
   //
