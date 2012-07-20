@@ -14,6 +14,8 @@ using namespace v8;
 using namespace kyotocabinet;
 
 
+class PolyDBWrap;
+
 class CursorWrap : public ObjectWrap {
   public:
     static Persistent<Function> ctor;
@@ -21,8 +23,10 @@ class CursorWrap : public ObjectWrap {
     static void Init(Handle<Object> target);
 
   private:
+    PolyDBWrap *wrapdb_;
     PolyDB::Cursor *cursor_;
 
+    //CursorWrap(PolyDBWrap *wrapdb);
     CursorWrap(PolyDB::Cursor *cursor);
     ~CursorWrap();
 
@@ -33,6 +37,7 @@ class CursorWrap : public ObjectWrap {
     static void OnWork(uv_work_t *work_req);
     static void OnWorkDone(uv_work_t *work_req);
 
+    void SetWrapDB(PolyDBWrap *wrapdb);
     Local<Value> MakeErrorObject(PolyDB::Error::Code result);
 };
 

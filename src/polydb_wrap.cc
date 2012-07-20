@@ -2520,7 +2520,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
   }
 }
 
-
+/*
 Local<Value> PolyDBWrap::MakeErrorObject(PolyDB::Error::Code result) {
   const char *name = PolyDB::Error::codename(result);
   Local<String> message = String::NewSymbol(name);
@@ -2529,6 +2529,7 @@ Local<Value> PolyDBWrap::MakeErrorObject(PolyDB::Error::Code result) {
   obj->Set(String::NewSymbol("code"), Integer::New(result), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
   return err;
 }
+*/
 
 void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);

@@ -35,7 +35,7 @@ typedef struct kc_cur_req_t {
 // cursor create request
 typedef struct kc_cur_create_req_t {
   KC_CUR_REQ_FIELD
-  Persistent<Object> wrapdb;
+  PolyDBWrap *wrapdb;
   CursorWrap *retcur;
   Persistent<Object> self;
 } kc_cur_create_req_t;
@@ -44,14 +44,25 @@ typedef struct kc_cur_create_req_t {
 CursorWrap::CursorWrap(PolyDB::Cursor *cursor) : cursor_(cursor) {
   TRACE("ctor: cursor_ = %p\n", cursor_);
   assert(cursor_ != NULL);
+  wrapdb_ = NULL;
 }
 
 CursorWrap::~CursorWrap() {
-  TRACE("destor: cursor_ = %p\n", cursor_);
+  TRACE("destor: wrapdb_ = %p, cursor_ = %p\n", wrapdb_, cursor_);
+  if (wrapdb_) {
+    wrapdb_->Unref();
+  }
   if (cursor_) {
     delete cursor_;
     cursor_ = NULL;
   }
+  wrapdb_ = NULL;
+}
+
+void CursorWrap::SetWrapDB(PolyDBWrap *wrapdb) {
+  wrapdb_ = wrapdb;
+  TRACE("wrapdb_ = %p\n", wrapdb_);
+  wrapdb_->Ref();
 }
 
 
@@ -84,12 +95,12 @@ Handle<Value> CursorWrap::New(const Arguments &args) {
     req->type = KC_CUR_CREATE;
     req->wrapcur = NULL;
     req->result = PolyDB::Error::SUCCESS;
-    req->wrapdb.Clear();
+    req->wrapdb = ObjectWrap::Unwrap<PolyDBWrap>(args[0]->ToObject());
+    req->wrapdb->Ref();
     req->retcur = NULL;
     req->self.Clear();
     req->cb.Clear();
 
-    req->wrapdb = Persistent<Object>::New(Handle<Object>::Cast(args[0]));
     req->self = Persistent<Object>::New(Handle<Object>::Cast(args.This()));
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
 
@@ -144,8 +155,7 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
     case KC_CUR_CREATE:
       {
         kc_cur_create_req_t *cur_req = static_cast<kc_cur_create_req_t*>(work_req->data);
-        PolyDBWrap *dbWrap = ObjectWrap::Unwrap<PolyDBWrap>(cur_req->wrapdb);
-        cur_req->retcur = new CursorWrap(dbWrap->Cursor());
+        cur_req->retcur = new CursorWrap(cur_req->wrapdb->Cursor());
         break;
       }
     default:
@@ -197,6 +207,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
         argc++;
         if (cur_req->retcur) {
           cur_req->retcur->Wrap(cur_req->self);
+          cur_req->retcur->SetWrapDB(cur_req->wrapdb);
           argv[argc++] = cur_req->self->ToObject();
         }
         break;
@@ -237,8 +248,9 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_CUR_CREATE:
       {
         kc_cur_create_req_t *cur_req = static_cast<kc_cur_create_req_t*>(work_req->data);
+        cur_req->wrapdb->Unref();
+        cur_req->wrapdb = NULL;
         cur_req->self.Dispose();
-        cur_req->wrapdb.Dispose();
         cur_req->retcur = NULL;
         free(cur_req);
         break;
