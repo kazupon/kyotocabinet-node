@@ -359,6 +359,111 @@ describe('Cursor class tests', function () {
     });
   });
 
+
+  //
+  // step (async)
+  //
+  describe('step', function () {
+    describe('db not open', function () {
+      it('operation should be failed', function (done) {
+        Cursor.create(new DB(), function (err, cur) {
+          if (err) { return done(err); }
+          cur.step(function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+    });
+    describe('db open', function () {
+      var db;
+      var cur;
+      before(function (done) {
+        db = new DB();
+        db.open({ path: '+', mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          db.set({ key: 'key1', value: 'hello' }, function (err) {
+            if (err) { return done(err); }
+            db.set({ key: 'key2', value: 'world' }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+      });
+      after(function (done) {
+        db.close(function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      beforeEach(function (done) {
+        Cursor.create(db, function (err, c) {
+          if (err) { return done(err); }
+          cur = c;
+          done();
+        });
+      });
+      afterEach(function (done) {
+        cur = null;
+        done();
+      });
+      describe('step to next record', function () {
+        it('operation should be success', function (done) {
+          cur.jump(function (err) {
+            if (err) { return done(err); }
+            cur.step(function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        describe('and step to next record', function () {
+          it('operation should be success', function (done) {
+            cur.step(function (err) {
+              err.should.have.property('code');
+              err.code.should.eql(Error.NOREC);
+              done();
+            });
+          });
+          describe('and step to ...', function () {
+            it('operation should be failed', function (done) {
+              cur.step(function (err) {
+                err.should.have.property('code');
+                err.code.should.eql(Error.NOREC);
+                done();
+              });
+            });
+          });
+        });
+      });
+      describe('parameter check', function () {
+        describe('no specific', function () {
+          it('operation should be occured exception', function (done) {
+            try {
+              cur.step();
+            } catch (e) {
+              error(e);
+              done();
+            }
+          });
+        });
+        describe('specific no function', function () {
+          it('operation should be occured exception', function (done) {
+            try {
+              cur.step(111);
+            } catch (e) {
+              error(e);
+              done();
+            }
+          });
+        });
+      });
+    });
+  });
+
+
   //
   // get (async)
   //
