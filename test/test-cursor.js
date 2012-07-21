@@ -622,26 +622,24 @@ describe('Cursor class tests', function () {
   });
 
 
-
   //
   // get (async)
   //
-  /*
   describe('get', function () {
     describe('db not open', function () {
-      it('operation should be failed', function (done) {
-        Cursor.create(new DB(), function (err, cur) {
-          if (err) { return done(err); }
-          cur.get(function (err, rec) {
-            should.not.exist(rec);
-            err.should.have.property('code');
-            err.code.should.eql(Error.INVALID);
-            done();
-          });
-        });
-      });
+      //it('operation should be failed', function (done) {
+      //  Cursor.create(new DB(), function (err, cur) {
+      //    if (err) { return done(err); }
+      //    cur.get(function (err, key, value) {
+      //      console.log(err, key, value);
+      //      err.should.have.property('code');
+      //      err.code.should.eql(Error.INVALID);
+      //      done();
+      //    });
+      //  });
+      //});
     });
-    describe('cursor not support db', function () {
+    describe('db open', function () {
       var db;
       before(function (done) {
         db = new DB();
@@ -657,47 +655,112 @@ describe('Cursor class tests', function () {
         });
       });
       after(function (done) {
-        db.clear(function (err) {
+        db.close(function (err) {
           if (err) { return done(err); }
-          db.close(function (err) {
+          done();
+        });
+      });
+      describe('get current record', function () {
+        var cur;
+        before(function (done) {
+          Cursor.create(db, function (err, c) {
             if (err) { return done(err); }
+            cur = c;
+            cur.jump(function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        after(function (done) {
+          cur = null;
+          done();
+        });
+        it('should be `key1` key and `hello` value', function (done) {
+          cur.get(function (err, key, value) {
+            if (err) { return done(err); }
+            key.should.eql('key1');
+            value.should.eql('hello');
             done();
           });
         });
+        describe('and get current record', function () {
+          it('should be `key1` key and `hello` value', function (done) {
+            cur.get(function (err, key, value) {
+              if (err) { return done(err); }
+              key.should.eql('key1');
+              value.should.eql('hello');
+              done();
+            });
+          });
+        });
       });
-      it('operation should be failed', function (done) {
-        Cursor.create(db, function (err, cur) {
-          if (err) { return done(err); }
-          cur.get(function (err, rec) {
-            console.log(err);
-            should.not.exist(rec);
-            err.should.have.property('code');
-            err.code.should.eql(Error.INVALID);
+      describe('get current record and step next to record', function () {
+        var cur;
+        before(function (done) {
+          Cursor.create(db, function (err, c) {
+            if (err) { return done(err); }
+            cur = c;
+            cur.jump(function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        after(function (done) {
+          cur = null;
+          done();
+        });
+        it('should be `key1` key and `hello` value', function (done) {
+          cur.get(true, function (err, key, value) {
+            if (err) { return done(err); }
+            key.should.eql('key1');
+            value.should.eql('hello');
             done();
           });
         });
-      });
-    });
-    describe('cursor support db', function () {
-      describe('no record', function () {
-      });
-      describe('two records', function () {
-        describe('move cursor', function () {
-          describe('first call', function () {
+        describe('and get current record next to record', function () {
+          it('should be `key2` key and `world` value', function (done) {
+            cur.get(true, function (err, key, value) {
+              if (err) { return done(err); }
+              key.should.eql('key2');
+              value.should.eql('world');
+              done();
+            });
           });
-          describe('second call', function () {
+          describe('and get current record ...', function () {
+            it('operation should be failed', function (done) {
+              cur.get(true, function (err) {
+                err.should.have.property('code');
+                err.code.should.eql(Error.NOREC);
+                done();
+              });
+            });
           });
         });
-        describe('no move cursor', function () {
-          describe('first call', function () {
+      });
+      describe('parameter check', function () {
+        var cur;
+        before(function (done) {
+          Cursor.create(db, function (err, c) {
+            if (err) { return done(err); }
+            cur = c;
+            done();
           });
-          describe('second call', function () {
+        });
+        describe('specific `step` is not boolean type', function () {
+          it('operation should be occured exception', function (done) {
+            try {
+              cur.get(1111, function (err, key, value) {});
+            } catch (e) {
+              error(e);
+              done();
+            }
           });
         });
       });
     });
   });
-  */
 
 
 });

@@ -35,7 +35,7 @@ class CursorWrap : public ObjectWrap {
     static Handle<Value> JumpBack(const Arguments &args);
     static Handle<Value> Step(const Arguments &args);
     static Handle<Value> StepBack(const Arguments &args);
-    //static Handle<Value> Get(const Arguments &args);
+    static Handle<Value> Get(const Arguments &args);
 
     static void OnWork(uv_work_t *work_req);
     static void OnWorkDone(uv_work_t *work_req);
