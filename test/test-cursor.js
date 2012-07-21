@@ -631,7 +631,6 @@ describe('Cursor class tests', function () {
         Cursor.create(new DB(), function (err, cur) {
           if (err) { return done(err); }
           cur.get(function (err, key, value) {
-            console.log(err, key, value);
             err.should.have.property('code');
             err.code.should.eql(Error.INVALID);
             done();
