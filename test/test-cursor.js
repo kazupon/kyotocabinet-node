@@ -763,5 +763,139 @@ describe('Cursor class tests', function () {
   });
 
 
+  //
+  // get_key (async)
+  //
+  describe('get_key', function () {
+    describe('db not open', function () {
+      it('operation should be failed', function (done) {
+        Cursor.create(new DB(), function (err, cur) {
+          if (err) { return done(err); }
+          cur.get_key(function (err, key, value) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+    });
+    describe('db open', function () {
+      var db;
+      before(function (done) {
+        db = new DB();
+        db.open({ path: '+', mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          db.set({ key: 'key1', value: 'hello' }, function (err) {
+            if (err) { return done(err); }
+            db.set({ key: 'key2', value: 'world' }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+      });
+      after(function (done) {
+        db.close(function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      describe('get current record', function () {
+        var cur;
+        before(function (done) {
+          Cursor.create(db, function (err, c) {
+            if (err) { return done(err); }
+            cur = c;
+            cur.jump(function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        after(function (done) {
+          cur = null;
+          done();
+        });
+        it('should be `key1` key', function (done) {
+          cur.get_key(function (err, key) {
+            if (err) { return done(err); }
+            key.should.eql('key1');
+            done();
+          });
+        });
+        describe('and get current record key', function () {
+          it('should be `key1` key', function (done) {
+            cur.get_key(function (err, key) {
+              if (err) { return done(err); }
+              key.should.eql('key1');
+              done();
+            });
+          });
+        });
+      });
+      describe('get current record key and step next to record', function () {
+        var cur;
+        before(function (done) {
+          Cursor.create(db, function (err, c) {
+            if (err) { return done(err); }
+            cur = c;
+            cur.jump(function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        after(function (done) {
+          cur = null;
+          done();
+        });
+        it('should be `key1` key', function (done) {
+          cur.get_key(true, function (err, key) {
+            if (err) { return done(err); }
+            key.should.eql('key1');
+            done();
+          });
+        });
+        describe('and get current record key next to record', function () {
+          it('should be `key2` key', function (done) {
+            cur.get_key(true, function (err, key) {
+              if (err) { return done(err); }
+              key.should.eql('key2');
+              done();
+            });
+          });
+          describe('and get current record key ...', function () {
+            it('operation should be failed', function (done) {
+              cur.get_key(true, function (err, key) {
+                err.should.have.property('code');
+                err.code.should.eql(Error.NOREC);
+                done();
+              });
+            });
+          });
+        });
+      });
+      describe('parameter check', function () {
+        var cur;
+        before(function (done) {
+          Cursor.create(db, function (err, c) {
+            if (err) { return done(err); }
+            cur = c;
+            done();
+          });
+        });
+        describe('specific `step` is not boolean type', function () {
+          it('operation should be occured exception', function (done) {
+            try {
+              cur.get_key(1111, function (err, key) {});
+            } catch (e) {
+              error(e);
+              done();
+            }
+          });
+        });
+      });
+    });
+  });
 });
 
