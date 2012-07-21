@@ -28,6 +28,7 @@ enum kc_cur_req_type {
   KC_CUR_GET_VALUE,
   KC_CUR_REMOVE,
   KC_CUR_SEIZE,
+  KC_CUR_SET_VALUE,
 };
 
 // common request field
@@ -536,6 +537,56 @@ Handle<Value> CursorWrap::Seize(const Arguments &args) {
   return args.This();
 }
 
+Handle<Value> CursorWrap::SetValue(const Arguments &args) {
+  HandleScope scope;
+  TRACE("SetValue\n");
+
+  CursorWrap *wrapCur = ObjectWrap::Unwrap<CursorWrap>(args.This());
+  assert(wrapCur != NULL);
+
+  if ( (args.Length() == 0) || (args.Length() == 1) ||
+       (args.Length() == 2 && (!args[0]->IsString() | (!args[1]->IsBoolean() & !args[1]->IsFunction()))) ||
+       (args.Length() == 3 && (!args[0]->IsString() | !args[1]->IsBoolean() | !args[2]->IsFunction())) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  req->type = KC_CUR_SET_VALUE;
+  req->wrapcur = wrapCur;
+  req->result = PolyDB::Error::SUCCESS;
+  req->key = NULL;
+  req->value = NULL;
+  req->step = false;
+  req->writable = false;
+  req->cb.Clear();
+
+  if (args.Length() == 2) {
+    if (args[0]->IsBoolean()) {
+      req->step = args[0]->BooleanValue();
+    } else {
+      String::Utf8Value value(args[0]->ToString());
+      req->value = kc::strdup(*value);
+    }
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  } else {
+    String::Utf8Value value(args[0]->ToString());
+    req->value = kc::strdup(*value);
+    req->step = args[1]->BooleanValue();
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[2]));
+  }
+
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  wrapCur->Ref();
+
+  return args.This();
+}
+
 
 void CursorWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -668,6 +719,15 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
         } else {
           cur_req->key = key;
           cur_req->value = kc::strdup((char *)value);
+        }
+        break;
+      }
+    case KC_CUR_SET_VALUE:
+      {
+        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        CursorWrap *wrapCur = cur_req->wrapcur;
+        if (!wrapCur->cursor_->set_value(cur_req->value, strlen(cur_req->value), cur_req->step)) {
+          cur_req->result = wrapCur->GetErrorCode();
         }
         break;
       }
@@ -825,6 +885,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
         break;
       }
     case KC_CUR_GET_VALUE:
+    case KC_CUR_SET_VALUE:
       {
         kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(cur_req, value);
@@ -861,6 +922,7 @@ void CursorWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("get_value"), FunctionTemplate::New(GetValue)->GetFunction());
   prottpl->Set(String::NewSymbol("remove"), FunctionTemplate::New(Remove)->GetFunction());
   prottpl->Set(String::NewSymbol("seize"), FunctionTemplate::New(Seize)->GetFunction());
+  prottpl->Set(String::NewSymbol("set_value"), FunctionTemplate::New(SetValue)->GetFunction());
 
   ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("Cursor"), ctor);
