@@ -46,6 +46,7 @@ class CursorWrap : public ObjectWrap {
     static void OnWorkDone(uv_work_t *work_req);
 
     void SetWrapDB(PolyDBWrap *wrapdb);
+    static void SendAsyncRequest(void *req);
     PolyDB::Error::Code GetErrorCode();
 };
 

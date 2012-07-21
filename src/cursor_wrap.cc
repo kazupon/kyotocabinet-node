@@ -16,6 +16,17 @@ using namespace kyotocabinet;
 namespace kc = kyotocabinet;
 
 
+#define KC_CUR_REQ_INIT(Type, Cursor, Key, Value, Step, Writable) \
+  req->type = Type;                                               \
+  req->wrapcur = Cursor;                                          \
+  req->result = PolyDB::Error::SUCCESS;                           \
+  req->key = Key;                                                 \
+  req->value = Value;                                             \
+  req->step = Step;                                               \
+  req->writable = Writable;                                       \
+  req->cb.Clear();                                                \
+
+
 // request type
 enum kc_cur_req_type {
   KC_CUR_CREATE,
@@ -94,6 +105,15 @@ PolyDB::Error::Code CursorWrap::GetErrorCode() {
 Persistent<Function> CursorWrap::ctor;
 
 
+void CursorWrap::SendAsyncRequest(void *req) {
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+}
+
+
 Handle<Value> CursorWrap::New(const Arguments &args) {
   HandleScope scope;
   TRACE("New\n");
@@ -129,11 +149,7 @@ Handle<Value> CursorWrap::New(const Arguments &args) {
     req->self = Persistent<Object>::New(Handle<Object>::Cast(args.This()));
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
 
-    uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-    uv_req->data = req;
-
-    int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-    TRACE("uv_queue_work: ret=%d\n", ret);
+    SendAsyncRequest(req);
   }
 
   return args.This();
@@ -174,14 +190,7 @@ Handle<Value> CursorWrap::Jump(const Arguments &args) {
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
-  req->type = KC_CUR_JUMP;
-  req->wrapcur = wrapCur;
-  req->result = PolyDB::Error::SUCCESS;
-  req->key = NULL;
-  req->value = NULL;
-  req->step = false;
-  req->writable = false;
-  req->cb.Clear();
+  KC_CUR_REQ_INIT(KC_CUR_JUMP, wrapCur, NULL, NULL, false, false);
 
   if (args.Length() == 1) {
     if (args[0]->IsFunction()) {
@@ -196,11 +205,7 @@ Handle<Value> CursorWrap::Jump(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   wrapCur->Ref();
 
@@ -222,14 +227,7 @@ Handle<Value> CursorWrap::JumpBack(const Arguments &args) {
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
-  req->type = KC_CUR_JUMP_BACK;
-  req->wrapcur = wrapCur;
-  req->result = PolyDB::Error::SUCCESS;
-  req->key = NULL;
-  req->value = NULL;
-  req->step = false;
-  req->writable = false;
-  req->cb.Clear();
+  KC_CUR_REQ_INIT(KC_CUR_JUMP_BACK, wrapCur, NULL, NULL, false, false);
 
   if (args.Length() == 1) {
     if (args[0]->IsFunction()) {
@@ -244,11 +242,7 @@ Handle<Value> CursorWrap::JumpBack(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   wrapCur->Ref();
 
@@ -269,22 +263,11 @@ Handle<Value> CursorWrap::Step(const Arguments &args) {
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
-  req->type = KC_CUR_STEP;
-  req->wrapcur = wrapCur;
-  req->result = PolyDB::Error::SUCCESS;
-  req->key = NULL;
-  req->value = NULL;
-  req->step = false;
-  req->writable = false;
-  req->cb.Clear();
+  KC_CUR_REQ_INIT(KC_CUR_STEP, wrapCur, NULL, NULL, false, false);
 
   req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   wrapCur->Ref();
 
@@ -305,22 +288,11 @@ Handle<Value> CursorWrap::StepBack(const Arguments &args) {
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
-  req->type = KC_CUR_STEP_BACK;
-  req->wrapcur = wrapCur;
-  req->result = PolyDB::Error::SUCCESS;
-  req->key = NULL;
-  req->value = NULL;
-  req->step = false;
-  req->writable = false;
-  req->cb.Clear();
+  KC_CUR_REQ_INIT(KC_CUR_STEP_BACK, wrapCur, NULL, NULL, false, false);
 
   req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   wrapCur->Ref();
 
@@ -342,14 +314,7 @@ Handle<Value> CursorWrap::Get(const Arguments &args) {
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
-  req->type = KC_CUR_GET;
-  req->wrapcur = wrapCur;
-  req->result = PolyDB::Error::SUCCESS;
-  req->key = NULL;
-  req->value = NULL;
-  req->step = false;
-  req->writable = false;
-  req->cb.Clear();
+  KC_CUR_REQ_INIT(KC_CUR_GET, wrapCur, NULL, NULL, false, false);
 
   if (args.Length() == 1) {
     if (args[0]->IsFunction()) {
@@ -362,11 +327,7 @@ Handle<Value> CursorWrap::Get(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   wrapCur->Ref();
 
@@ -388,14 +349,7 @@ Handle<Value> CursorWrap::GetKey(const Arguments &args) {
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
-  req->type = KC_CUR_GET_KEY;
-  req->wrapcur = wrapCur;
-  req->result = PolyDB::Error::SUCCESS;
-  req->key = NULL;
-  req->value = NULL;
-  req->step = false;
-  req->writable = false;
-  req->cb.Clear();
+  KC_CUR_REQ_INIT(KC_CUR_GET_KEY, wrapCur, NULL, NULL, false, false);
 
   if (args.Length() == 1) {
     if (args[0]->IsFunction()) {
@@ -408,11 +362,7 @@ Handle<Value> CursorWrap::GetKey(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   wrapCur->Ref();
 
@@ -434,14 +384,7 @@ Handle<Value> CursorWrap::GetValue(const Arguments &args) {
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
-  req->type = KC_CUR_GET_VALUE;
-  req->wrapcur = wrapCur;
-  req->result = PolyDB::Error::SUCCESS;
-  req->key = NULL;
-  req->value = NULL;
-  req->step = false;
-  req->writable = false;
-  req->cb.Clear();
+  KC_CUR_REQ_INIT(KC_CUR_GET_VALUE, wrapCur, NULL, NULL, false, false);
 
   if (args.Length() == 1) {
     if (args[0]->IsFunction()) {
@@ -454,11 +397,7 @@ Handle<Value> CursorWrap::GetValue(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   wrapCur->Ref();
 
@@ -479,22 +418,11 @@ Handle<Value> CursorWrap::Remove(const Arguments &args) {
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
-  req->type = KC_CUR_REMOVE;
-  req->wrapcur = wrapCur;
-  req->result = PolyDB::Error::SUCCESS;
-  req->key = NULL;
-  req->value = NULL;
-  req->step = false;
-  req->writable = false;
-  req->cb.Clear();
+  KC_CUR_REQ_INIT(KC_CUR_REMOVE, wrapCur, NULL, NULL, false, false);
 
   req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   wrapCur->Ref();
 
@@ -515,22 +443,11 @@ Handle<Value> CursorWrap::Seize(const Arguments &args) {
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
-  req->type = KC_CUR_SEIZE;
-  req->wrapcur = wrapCur;
-  req->result = PolyDB::Error::SUCCESS;
-  req->key = NULL;
-  req->value = NULL;
-  req->step = false;
-  req->writable = false;
-  req->cb.Clear();
+  KC_CUR_REQ_INIT(KC_CUR_SEIZE, wrapCur, NULL, NULL, false, false);
 
   req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   wrapCur->Ref();
 
@@ -552,14 +469,7 @@ Handle<Value> CursorWrap::SetValue(const Arguments &args) {
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
-  req->type = KC_CUR_SET_VALUE;
-  req->wrapcur = wrapCur;
-  req->result = PolyDB::Error::SUCCESS;
-  req->key = NULL;
-  req->value = NULL;
-  req->step = false;
-  req->writable = false;
-  req->cb.Clear();
+  KC_CUR_REQ_INIT(KC_CUR_SET_VALUE, wrapCur, NULL, NULL, false, false);
 
   if (args.Length() == 2) {
     if (args[0]->IsBoolean()) {
@@ -576,11 +486,7 @@ Handle<Value> CursorWrap::SetValue(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[2]));
   }
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   wrapCur->Ref();
 
