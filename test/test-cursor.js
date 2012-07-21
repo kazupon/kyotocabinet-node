@@ -627,17 +627,17 @@ describe('Cursor class tests', function () {
   //
   describe('get', function () {
     describe('db not open', function () {
-      //it('operation should be failed', function (done) {
-      //  Cursor.create(new DB(), function (err, cur) {
-      //    if (err) { return done(err); }
-      //    cur.get(function (err, key, value) {
-      //      console.log(err, key, value);
-      //      err.should.have.property('code');
-      //      err.code.should.eql(Error.INVALID);
-      //      done();
-      //    });
-      //  });
-      //});
+      it('operation should be failed', function (done) {
+        Cursor.create(new DB(), function (err, cur) {
+          if (err) { return done(err); }
+          cur.get(function (err, key, value) {
+            console.log(err, key, value);
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
     });
     describe('db open', function () {
       var db;
