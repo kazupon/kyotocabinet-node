@@ -1169,5 +1169,140 @@ describe('Cursor class tests', function () {
   });
 
 
+  //
+  // seize (async)
+  //
+  describe('seize', function () {
+    describe('db not open', function () {
+      it('operation should be failed', function (done) {
+        Cursor.create(new DB(), function (err, cur) {
+          if (err) { return done(err); }
+          cur.seize(function (err, key, value) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+    });
+    describe('db open', function () {
+      var db;
+      before(function (done) {
+        db = new DB();
+        db.open({ path: '+', mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      after(function (done) {
+        db.close(function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      describe('not registed record', function () {
+        var cur;
+        before(function (done) {
+          Cursor.create(db, function (err, c) {
+            if (err) { return done(err); }
+            cur = c;
+            done();
+          });
+        });
+        it('operation should be failed', function (done) {
+          cur.seize(function (err, key, value) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.NOREC);
+            done();
+          });
+        });
+      });
+      describe('registed 2 record', function () {
+        before(function (done) {
+          db.set({ key: 'key1', value: 'hello' }, function (err) {
+            if (err) { return done(err); }
+            db.set({ key: 'key2', value: 'world' }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        after(function (done) {
+          db.clear(function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        describe('seize current record', function () {
+          var cur;
+          before(function (done) {
+            Cursor.create(db, function (err, c) {
+              if (err) { return done(err); }
+              cur = c;
+              cur.jump(function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+          });
+          it('should be success', function (done) {
+            cur.seize(function (err, key, value) {
+              if (err) { return done(err); }
+              key.should.eql('key1');
+              value.should.eql('hello');
+              db.count(function (err, cnt) {
+                if (err) { return done(err); }
+                cnt.should.eql(1);
+                done();
+              });
+            });
+          });
+          describe('and seize current record', function () {
+            it('should be success', function (done) {
+              cur.seize(function (err, key, value) {
+                if (err) { return done(err); }
+                key.should.eql('key2');
+                value.should.eql('world');
+                db.count(function (err, cnt) {
+                  if (err) { return done(err); }
+                  cnt.should.eql(0);
+                  done();
+                });
+              });
+            });
+            describe('and seize ...', function () {
+              it('operation should be failed', function (done) {
+                cur.seize(function (err, key, value) {
+                  err.should.have.property('code');
+                  err.code.should.eql(Error.NOREC);
+                  done();
+                });
+              });
+            });
+          });
+        });
+      });
+      describe('parameter check', function () {
+        var cur;
+        before(function (done) {
+          Cursor.create(db, function (err, c) {
+            if (err) { return done(err); }
+            cur = c;
+            done();
+          });
+        });
+        describe('no specific', function () {
+          it('operation should be occured exception', function (done) {
+            try {
+              cur.seize();
+            } catch (e) {
+              error(e);
+              done();
+            }
+          });
+        });
+      });
+    });
+  });
 });
 
