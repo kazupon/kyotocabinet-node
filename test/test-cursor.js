@@ -1110,35 +1110,33 @@ describe('Cursor class tests', function () {
               });
             });
           });
+          it('should be success', function (done) {
+            cur.remove(function (err) {
+              if (err) { return done(err); }
+              db.count(function (err, cnt) {
+                if (err) { return done(err); }
+                cnt.should.eql(1);
+                done();
+              });
+            });
+          });
           describe('and remove current record', function () {
             it('should be success', function (done) {
               cur.remove(function (err) {
                 if (err) { return done(err); }
                 db.count(function (err, cnt) {
                   if (err) { return done(err); }
-                  cnt.should.eql(1);
+                  cnt.should.eql(0);
                   done();
                 });
               });
             });
-            describe('and remove current record', function () {
-              it('should be success', function (done) {
+            describe('and remove ...', function () {
+              it('operation should be failed', function (done) {
                 cur.remove(function (err) {
-                  if (err) { return done(err); }
-                  db.count(function (err, cnt) {
-                    if (err) { return done(err); }
-                    cnt.should.eql(0);
-                    done();
-                  });
-                });
-              });
-              describe('adn remove ...', function () {
-                it('operation should be failed', function (done) {
-                  cur.remove(function (err) {
-                    err.should.have.property('code');
-                    err.code.should.eql(Error.NOREC);
-                    done();
-                  });
+                  err.should.have.property('code');
+                  err.code.should.eql(Error.NOREC);
+                  done();
                 });
               });
             });
@@ -1304,5 +1302,8 @@ describe('Cursor class tests', function () {
       });
     });
   });
+
+
+
 });
 
