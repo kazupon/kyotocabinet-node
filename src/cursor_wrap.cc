@@ -25,6 +25,7 @@ enum kc_cur_req_type {
   KC_CUR_STEP_BACK,
   KC_CUR_GET,
   KC_CUR_GET_KEY,
+  KC_CUR_GET_VALUE,
 };
 
 // common request field
@@ -415,6 +416,52 @@ Handle<Value> CursorWrap::GetKey(const Arguments &args) {
   return args.This();
 }
 
+Handle<Value> CursorWrap::GetValue(const Arguments &args) {
+  HandleScope scope;
+  TRACE("GetValue\n");
+
+  CursorWrap *wrapCur = ObjectWrap::Unwrap<CursorWrap>(args.This());
+  assert(wrapCur != NULL);
+
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsBoolean() & !args[0]->IsFunction())) ||
+       (args.Length() == 2 && (!args[0]->IsBoolean() | !args[1]->IsFunction())) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  req->type = KC_CUR_GET_VALUE;
+  req->wrapcur = wrapCur;
+  req->result = PolyDB::Error::SUCCESS;
+  req->key = NULL;
+  req->value = NULL;
+  req->step = false;
+  req->writable = false;
+  req->cb.Clear();
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else {
+      req->step = args[0]->BooleanValue();
+    }
+  } else {
+    req->step = args[0]->BooleanValue();
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  wrapCur->Ref();
+
+  return args.This();
+}
+
 
 void CursorWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -510,6 +557,21 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
         }
         break;
       }
+    case KC_CUR_GET_VALUE:
+      {
+        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        CursorWrap *wrapCur = cur_req->wrapcur;
+        TRACE("cursor get_value: step = %d\n", cur_req->step);
+        size_t value_size;
+        char *value = wrapCur->cursor_->get_value(&value_size, cur_req->step);
+        TRACE("cursor->get_value: value = %s(%p)\n", value, value);
+        if (value == NULL) {
+          cur_req->result = wrapCur->GetErrorCode();
+        } else {
+          cur_req->value = value;
+        }
+        break;
+      }
     default:
       assert(0);
       break;
@@ -576,6 +638,14 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
         if (req->result == PolyDB::Error::SUCCESS) {
           kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
           argv[argc++] = String::New(cur_req->key, strlen(cur_req->key));
+        }
+        break;
+      }
+    case KC_CUR_GET_VALUE:
+      {
+        if (req->result == PolyDB::Error::SUCCESS) {
+          kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+          argv[argc++] = String::New(cur_req->value, strlen(cur_req->value));
         }
         break;
       }
@@ -652,6 +722,13 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
         free(cur_req);
         break;
       }
+    case KC_CUR_GET_VALUE:
+      {
+        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        SAFE_REQ_ATTR_FREE(cur_req, value);
+        free(cur_req);
+        break;
+      }
     default:
       assert(0);
   }
@@ -679,6 +756,7 @@ void CursorWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("step_back"), FunctionTemplate::New(StepBack)->GetFunction());
   prottpl->Set(String::NewSymbol("get"), FunctionTemplate::New(Get)->GetFunction());
   prottpl->Set(String::NewSymbol("get_key"), FunctionTemplate::New(GetKey)->GetFunction());
+  prottpl->Set(String::NewSymbol("get_value"), FunctionTemplate::New(GetValue)->GetFunction());
 
   ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("Cursor"), ctor);

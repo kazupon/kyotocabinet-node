@@ -897,5 +897,144 @@ describe('Cursor class tests', function () {
       });
     });
   });
+
+
+  //
+  // get_value (async)
+  //
+  describe('get_value', function () {
+    describe('db not open', function () {
+      it('operation should be failed', function (done) {
+        Cursor.create(new DB(), function (err, cur) {
+          if (err) { return done(err); }
+          cur.get_value(function (err, value) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+    });
+    describe('db open', function () {
+      var db;
+      before(function (done) {
+        db = new DB();
+        db.open({ path: '+', mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          db.set({ key: 'key1', value: 'hello' }, function (err) {
+            if (err) { return done(err); }
+            db.set({ key: 'key2', value: 'world' }, function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+      });
+      after(function (done) {
+        db.close(function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      describe('get current record value', function () {
+        var cur;
+        before(function (done) {
+          Cursor.create(db, function (err, c) {
+            if (err) { return done(err); }
+            cur = c;
+            cur.jump(function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        after(function (done) {
+          cur = null;
+          done();
+        });
+        it('should be `hello` value', function (done) {
+          cur.get_value(function (err, value) {
+            if (err) { return done(err); }
+            value.should.eql('hello');
+            done();
+          });
+        });
+        describe('and get current record value', function () {
+          it('should be `hello` value', function (done) {
+            cur.get_value(function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql('hello');
+              done();
+            });
+          });
+        });
+      });
+      describe('get current record value and step next to record', function () {
+        var cur;
+        before(function (done) {
+          Cursor.create(db, function (err, c) {
+            if (err) { return done(err); }
+            cur = c;
+            cur.jump(function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        after(function (done) {
+          cur = null;
+          done();
+        });
+        it('should be `hello` value', function (done) {
+          cur.get_value(true, function (err, value) {
+            if (err) { return done(err); }
+            value.should.eql('hello');
+            done();
+          });
+        });
+        describe('and get current record value next to record', function () {
+          it('should be `world` value', function (done) {
+            cur.get_value(true, function (err, value) {
+              if (err) { return done(err); }
+              value.should.eql('world');
+              done();
+            });
+          });
+          describe('and get current record value ...', function () {
+            it('operation should be failed', function (done) {
+              cur.get_value(true, function (err, value) {
+                err.should.have.property('code');
+                err.code.should.eql(Error.NOREC);
+                done();
+              });
+            });
+          });
+        });
+      });
+      describe('parameter check', function () {
+        var cur;
+        before(function (done) {
+          Cursor.create(db, function (err, c) {
+            if (err) { return done(err); }
+            cur = c;
+            done();
+          });
+        });
+        describe('specific `step` is not boolean type', function () {
+          it('operation should be occured exception', function (done) {
+            try {
+              cur.get_value(1111, function (err, value) {});
+            } catch (e) {
+              error(e);
+              done();
+            }
+          });
+        });
+      });
+    });
+  });
+
+
+
 });
 
