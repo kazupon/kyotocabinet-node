@@ -10,6 +10,9 @@
 #include "debug.h"
 #include "utils.h"
 #include <assert.h>
+#include <kcdb.h>
+#include <pthread.h>
+
 
 using namespace v8;
 using namespace kyotocabinet;
@@ -24,6 +27,7 @@ namespace kc = kyotocabinet;
   req->value = Value;                                             \
   req->step = Step;                                               \
   req->writable = Writable;                                       \
+  req->visitor.Clear();                                           \
   req->cb.Clear();                                                \
 
 
@@ -40,6 +44,7 @@ enum kc_cur_req_type {
   KC_CUR_REMOVE,
   KC_CUR_SEIZE,
   KC_CUR_SET_VALUE,
+  KC_CUR_ACCEPT,
 };
 
 // common request field
@@ -69,17 +74,197 @@ typedef struct kc_cur_cmn_req_t {
   char *value;
   bool step;
   bool writable;
+  Persistent<Object> visitor;
 } kc_cur_cmn_req_t;
+
+
+static pthread_mutex_t cursor_access = PTHREAD_MUTEX_INITIALIZER;
+
+
+class AsyncCursorVisitor : public PolyDB::Visitor {
+public:
+  pthread_cond_t cond_;
+  Persistent<Object> visitor_;
+  bool writable_;
+  char *key_;
+  char *value_;
+  size_t key_size_;
+  size_t value_size_;
+  char *rv_;
+  size_t sp_;
+
+  explicit AsyncCursorVisitor(uv_loop_t *loop) : loop_(loop), 
+                                                 writable_(false), rv_(NULL), sp_(-1) {
+    TRACE("ctor: %p\n", this);
+    visitor_.Clear();
+    uv_async_init(loop_, &async_, AsyncCallback);
+    async_.data = this;
+    uv_unref((uv_handle_t *)&async_);
+    pthread_cond_init(&cond_, NULL);
+    TRACE("arguments: async_ = %p\n", &async_);
+  }
+  ~AsyncCursorVisitor() {
+    TRACE("destor\n");
+    async_.data = NULL;
+    pthread_cond_destroy(&cond_);
+    TRACE("handle close ...\n");
+    uv_close((uv_handle_t *)&async_, AsyncCloseCallback);
+    TRACE("... handle close done\n");
+    loop_ = NULL;
+  }
+private:
+  uv_loop_t *loop_;
+  uv_async_t async_;
+
+  const char* visit_full(const char *kbuf, size_t ksiz,
+                         const char *vbuf, size_t vsiz, size_t *sp) {
+    //HandleScope scope;
+    TRACE("arguments: kbuf = %s, ksiz = %d, vbuf = %s, vsiz = %d, sp = %d(%p)\n", kbuf, ksiz, vbuf, vsiz, *sp, sp);
+    rv_ = (char *)NOP;
+    sp_ = *sp;
+    key_ = (char *)kbuf;
+    key_size_ = ksiz;
+    value_ = (char *)vbuf;
+    value_size_ = vsiz;
+
+    TRACE("before: rv_ = %s(%p), sp_ = %d\n", rv_, rv_, sp_);
+    uv_async_send(&async_);
+
+    TRACE("wating ... \n");
+    pthread_cond_wait(&cond_, &cursor_access);
+    TRACE("... callback done\n");
+
+    TRACE("after: rv_ = %p, sp_ = %d\n", rv_, sp_);
+    const char *rv = (const char *)rv_;
+    if ((const char *)rv_ != NOP && (const char *)rv_ != REMOVE) {
+      *sp = sp_;
+      TRACE("sp = %d(%p)\n", *sp, sp);
+    }
+    /*
+    const char *rv = NOP;
+    Local<Value> ret;
+    Local<String> method_name = String::NewSymbol("visit_full");
+    Local<Function> cb;
+    if (!visitor_->IsFunction()) {
+      if (!visitor_->ToObject()->Has(method_name) 
+          && !visitor_->ToObject()->Get(method_name)->IsFunction()) {
+        rv = NOP;
+      }
+      cb = Local<Function>::New(Handle<Function>::Cast(visitor_->ToObject()->Get(method_name)));
+    } else {
+      cb = Local<Function>::New(Handle<Function>::Cast(visitor_));
+    }
+
+    if (!cb.IsEmpty()) {
+      Local<Value> argv[2] = { 
+        String::New(kbuf, ksiz),
+        String::New(vbuf, vsiz),
+      };
+      TryCatch try_catch;
+      ret = cb->Call(Context::GetCurrent()->Global(), 2, argv);
+      if (try_catch.HasCaught()) {
+        FatalException(try_catch);
+      }
+
+      if (writable_) {
+        if (!ret.IsEmpty()) {
+          if (ret->IsNumber()) {
+            int64_t num_ret = ret->IntegerValue();
+            if (num_ret == 1) {
+              rv = REMOVE;
+            }
+          } else if (ret->IsString()) {
+            String::Utf8Value str_ret(ret->ToString());
+            if (*str_ret) {
+              //rv = *str_ret;
+              //*sp = strlen(*str_ret);
+              rv = kc::strdup(*str_ret);
+              *sp = strlen(rv);
+            }
+          }
+        }
+      } else {
+        rv = NULL;
+      }
+    }
+    */
+    
+    return rv;
+  }
+
+  static void AsyncCloseCallback(uv_handle_t *handle) {
+    TRACE("handle = %p\n", handle);
+  }
+
+  static void AsyncCallback(uv_async_t *async, int status) {
+    HandleScope scope;
+    TRACE("async = %p, status = %d\n", async, status);
+
+    AsyncCursorVisitor *visitor = static_cast<AsyncCursorVisitor*>(async->data);
+    assert(visitor != NULL);
+    TRACE("visitor(%p): key_ = %s, key_size_ = %d, value_ = %s, value_size_ = %d\n", 
+        visitor, visitor->key_, visitor->key_size_, visitor->value_, visitor->value_size_);
+
+    Local<Value> ret;
+    Local<Function> cb;
+    if (!visitor->visitor_->IsFunction()) {
+      visitor->rv_ = (char *)NOP;
+    } else {
+      cb = Local<Function>::New(Handle<Function>::Cast(visitor->visitor_));
+    }
+
+    if (!cb.IsEmpty()) {
+      Local<Value> argv[2] = { 
+        String::New(visitor->key_, visitor->key_size_),
+        String::New(visitor->value_, visitor->value_size_),
+      };
+      TryCatch try_catch;
+      ret = cb->Call(Context::GetCurrent()->Global(), 2, argv);
+      if (try_catch.HasCaught()) {
+        FatalException(try_catch);
+      }
+
+      if (visitor->writable_) {
+        if (!ret.IsEmpty()) {
+          if (ret->IsNumber()) {
+            int64_t num_ret = ret->IntegerValue();
+            if (num_ret == 1) {
+              const char *rv = REMOVE;
+              visitor->rv_ = (char *)rv;
+            }
+          } else if (ret->IsString()) {
+            String::Utf8Value str_ret(ret->ToString());
+            if (*str_ret) {
+              visitor->rv_ = kc::strdup(*str_ret);
+              visitor->sp_ = strlen(visitor->rv_);
+            }
+          }
+        }
+      } else {
+        visitor->rv_ = NULL;
+      }
+    }
+
+    TRACE("signal notify ... : rv_ = %p, sp_ = %d\n", visitor->rv_, visitor->sp_);
+    pthread_cond_signal(&visitor->cond_);
+    TRACE("... notify done\n");
+  }
+};
 
 
 CursorWrap::CursorWrap(PolyDB::Cursor *cursor) : cursor_(cursor) {
   TRACE("ctor: cursor_ = %p\n", cursor_);
   assert(cursor_ != NULL);
   wrapdb_ = NULL;
+  visitor_ = new AsyncCursorVisitor(uv_default_loop());
 }
 
 CursorWrap::~CursorWrap() {
-  TRACE("destor: wrapdb_ = %p, cursor_ = %p\n", wrapdb_, cursor_);
+  TRACE("destor: wrapdb_ = %p, cursor_ = %p, visitor_ = %p\n", wrapdb_, cursor_, visitor_);
+  if (visitor_) {
+    delete visitor_;
+    visitor_ = NULL;
+  }
   if (wrapdb_) {
     wrapdb_->Unref();
   }
@@ -493,6 +678,140 @@ Handle<Value> CursorWrap::SetValue(const Arguments &args) {
   return args.This();
 }
 
+Handle<Value> CursorWrap::Accept(const Arguments &args) {
+  HandleScope scope;
+  TRACE("Accept\n");
+
+  CursorWrap *wrapCur = ObjectWrap::Unwrap<CursorWrap>(args.This());
+  assert(wrapCur != NULL);
+
+  Local<String> visitor_sym = String::NewSymbol("visitor");
+  Local<String> writable_sym = String::NewSymbol("writable");
+  Local<String> step_sym = String::NewSymbol("step");
+  if ( (args.Length() == 0) ||
+       (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && (!args[0]->ToObject()->Has(visitor_sym) || !args[0]->ToObject()->Get(visitor_sym)->IsObject())) ||
+       (args.Length() == 1 && args[0]->IsObject() && (args[0]->ToObject()->Has(writable_sym) & !args[0]->ToObject()->Get(writable_sym)->IsBoolean())) ||
+       (args.Length() == 1 && args[0]->IsObject() && (args[0]->ToObject()->Has(step_sym) & !args[0]->ToObject()->Get(step_sym)->IsBoolean())) ||
+       (args.Length() == 2 && (!args[0]->IsObject() | !args[1]->IsFunction())) ||
+       (args.Length() == 2 && args[0]->IsObject() && (!args[0]->ToObject()->Has(visitor_sym) || !args[0]->ToObject()->Get(visitor_sym)->IsFunction())) ||
+       (args.Length() == 2 && args[0]->IsObject() && (args[0]->ToObject()->Has(step_sym) & !args[0]->ToObject()->Get(step_sym)->IsBoolean())) ||
+       (args.Length() == 2 && args[0]->IsObject() && (args[0]->ToObject()->Has(writable_sym) & !args[0]->ToObject()->Get(writable_sym)->IsBoolean())) ) {
+    ThrowException(Exception::TypeError(String::New("Bad argument")));
+    return args.This();
+  }
+
+  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  KC_CUR_REQ_INIT(KC_CUR_ACCEPT, wrapCur, NULL, NULL, false, true);
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
+      if (args[0]->ToObject()->Has(visitor_sym)) {
+        req->visitor = Persistent<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+      }
+      if (args[0]->ToObject()->Has(writable_sym)) {
+        req->writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+      }
+      if (args[0]->ToObject()->Has(step_sym)) {
+        req->step = args[0]->ToObject()->Get(step_sym)->BooleanValue();
+      }
+    }
+  } else {
+    if (args[0]->ToObject()->Has(visitor_sym)) {
+      req->visitor = Persistent<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+    }
+    if (args[0]->ToObject()->Has(writable_sym)) {
+      req->writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+    }
+    if (args[0]->ToObject()->Has(step_sym)) {
+      req->step = args[0]->ToObject()->Get(step_sym)->BooleanValue();
+    }
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+
+  SendAsyncRequest(req);
+
+  wrapCur->Ref();
+  /*
+  PolyDB::Error::Code result = PolyDB::Error::SUCCESS;
+  Persistent<Function> cb;
+  bool writable = true;
+  bool step = false;
+  Persistent<Object> visitor;
+  cb.Clear();
+  visitor.Clear();
+
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
+      if (args[0]->ToObject()->Has(visitor_sym)) {
+        visitor = Persistent<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+      }
+      if (args[0]->ToObject()->Has(writable_sym)) {
+        writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+      }
+      if (args[0]->ToObject()->Has(step_sym)) {
+        step = args[0]->ToObject()->Get(step_sym)->BooleanValue();
+      }
+    }
+  } else {
+    if (args[0]->ToObject()->Has(visitor_sym)) {
+      visitor = Persistent<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+    }
+    if (args[0]->ToObject()->Has(writable_sym)) {
+      writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+    }
+    if (args[0]->ToObject()->Has(step_sym)) {
+      step = args[0]->ToObject()->Get(step_sym)->BooleanValue();
+    }
+    cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+  }
+
+  // TODO' should be non-blocking implements ...
+  // execute
+  if (visitor.IsEmpty()) {
+    result = PolyDB::Error::INVALID;
+  } else {
+    wrapCur->visitor_->writable_ = writable;
+    wrapCur->visitor_->visitor_.Clear();
+    wrapCur->visitor_->visitor_ = visitor;
+    if (!wrapCur->cursor_->accept(wrapCur->visitor_, writable, step)) {
+      TRACE("cursor->accept failed\n");
+      result = wrapCur->GetErrorCode();
+    }
+  }
+
+  // init callback arguments.
+  Local<Value> argv[1] = { 
+    Local<Value>::New(Null()),
+  };
+
+  // set error to callback arguments.
+  if (result != PolyDB::Error::SUCCESS) {
+    const char *name = PolyDB::Error::codename(result);
+    Local<String> message = String::NewSymbol(name);
+    Local<Value> err = Exception::Error(message);
+    Local<Object> obj = err->ToObject();
+    obj->Set(String::NewSymbol("code"), Integer::New(result), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
+    argv[0] = err;
+  }
+
+  // execute callback
+  if (!cb.IsEmpty()) {
+    TryCatch try_catch;
+    MakeCallback(wrapCur->handle_, cb, 1, argv);
+    if (try_catch.HasCaught()) {
+      FatalException(try_catch);
+    }
+  } 
+  */
+
+  return args.This();
+}
+
 
 void CursorWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
@@ -637,6 +956,21 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
         }
         break;
       }
+    case KC_CUR_ACCEPT:
+      {
+        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        CursorWrap *wrapCur = cur_req->wrapcur;
+        wrapCur->visitor_->writable_ = cur_req->writable;
+        wrapCur->visitor_->visitor_.Clear();
+        wrapCur->visitor_->visitor_ = cur_req->visitor;
+        TRACE("cursor->accept: writable = %d, step = %d\n", cur_req->writable, cur_req->step);
+        if (!wrapCur->cursor_->accept(wrapCur->visitor_, cur_req->writable, cur_req->step)) {
+          TRACE("cursor->accept failed\n");
+          cur_req->result = wrapCur->GetErrorCode();
+        }
+        TRACE("cursor->accept done\n");
+        break;
+      }
     default:
       assert(0);
       break;
@@ -758,6 +1092,13 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
         free(cur_req);
         break;
       }
+    case KC_CUR_ACCEPT:
+      {
+        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        cur_req->visitor.Dispose();
+        free(cur_req);
+        break;
+      }
     case KC_CUR_JUMP:
     case KC_CUR_JUMP_BACK:
       {
@@ -829,6 +1170,7 @@ void CursorWrap::Init(Handle<Object> target) {
   prottpl->Set(String::NewSymbol("remove"), FunctionTemplate::New(Remove)->GetFunction());
   prottpl->Set(String::NewSymbol("seize"), FunctionTemplate::New(Seize)->GetFunction());
   prottpl->Set(String::NewSymbol("set_value"), FunctionTemplate::New(SetValue)->GetFunction());
+  prottpl->Set(String::NewSymbol("accept"), FunctionTemplate::New(Accept)->GetFunction());
 
   ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("Cursor"), ctor);

@@ -10,6 +10,7 @@ var checkConstants = require('./macro').checkConstants;
 var kc = require('../lib/kyotocabinet');
 var DB = kc.DB;
 var Error = kc.Error;
+var Visitor = kc.Visitor;
 var Cursor = kc.Cursor;
 
 
@@ -1465,6 +1466,686 @@ describe('Cursor class tests', function () {
   });
 
 
+  //
+  // accept (async)
+  //
+  describe('accept', function () {
+    describe('db not open', function () {
+      //it('operation should be failed', function (done) {
+      //  Cursor.create(new DB(), function (err, cur) {
+      //    if (err) { return done(err); }
+      //    cur.accept({
+      //      visitor: function (key, value) { return Visitor.NOP; }
+      //    }, function (err) {
+      //      err.should.have.property('code');
+      //      err.code.should.eql(Error.INVALID);
+      //      done();
+      //    });
+      //  });
+      //});
+    });
+    describe('db open', function () {
+      var db;
+      before(function (done) {
+        db = new DB();
+        db.open({ path: '+', mode: DB.OWRITER + DB.OCREATE }, function (err) {
+          if (err) { return done(err); }
+          db.set({ key: 'key1', value: 'hello' }, function (err) {
+            if (err) { return done(err); }
+            db.set({ key: 'key2', value: 'world' }, function (err) {
+              if (err) { return done(err); }
+              db.set({ key: 'key3', value: 'hoge' }, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+          });
+        });
+      });
+      after(function (done) {
+        db.close(function (err) {
+          if (err) { return done(err); }
+          done();
+        });
+      });
+      describe('read only', function () {
+        var cur;
+        before(function (done) {
+          Cursor.create(db, function (err, c) {
+            if (err) { return done(err); }
+            cur = c;
+            cur.jump(function (err) {
+              if (err) { return done(err); }
+              done();
+            });
+          });
+        });
+        describe('no step', function () {
+          var visitor_call_cnt = 0;
+          describe('get current record', function () {
+            var key;
+            var value;
+            before(function (done) {
+              cur.accept({
+                visitor: function () {
+                  visitor_call_cnt++;
+                  key = arguments[0];
+                  value = arguments[1];
+                  return Visitor.NOP;
+                },
+                writable: false
+              }, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+            after(function (done) {
+              visitor_call_cnt = 0;
+              done();
+            });
+            it('should be `1` call `visitor`', function (done) {
+              visitor_call_cnt.should.eql(1);
+              done();
+            });
+            it('should be `key1` key', function (done) {
+              key.should.eql('key1');
+              done();
+            });
+            it('should be `hello` value', function (done) {
+              value.should.eql('hello');
+              done();
+            });
+            describe('get `key1` key record', function () {
+              it('should be `hello` value', function (done) {
+                db.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  done();
+                });
+              });
+            });
+          });
+          describe('update current record', function () {
+            var key;
+            var value;
+            before(function (done) {
+              cur.accept({
+                visitor: function () {
+                  visitor_call_cnt++;
+                  key = arguments[0];
+                  value = arguments[1];
+                  return 'the';
+                },
+                writable: false
+              }, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+            after(function (done) {
+              visitor_call_cnt = 0;
+              done();
+            });
+            it('should be `1` call `visitor`', function (done) {
+              visitor_call_cnt.should.eql(1);
+              done();
+            });
+            it('should be `key1` key', function (done) {
+              key.should.eql('key1');
+              done();
+            });
+            it('should be `hello` value', function (done) {
+              value.should.eql('hello');
+              done();
+            });
+            describe('get `key1` key record', function () {
+              it('should be `hello` value', function (done) {
+                db.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  done();
+                });
+              });
+            });
+          });
+          describe('remove current record', function () {
+            var key;
+            var value;
+            before(function (done) {
+              cur.accept({
+                visitor: function () {
+                  visitor_call_cnt++;
+                  key = arguments[0];
+                  value = arguments[1];
+                  return Visitor.REMOVE;
+                },
+                writable: false
+              }, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+            after(function (done) {
+              visitor_call_cnt = 0;
+              done();
+            });
+            it('should be `1` call `visitor`', function (done) {
+              visitor_call_cnt.should.eql(1);
+              done();
+            });
+            it('should be `key1` key', function (done) {
+              key.should.eql('key1');
+              done();
+            });
+            it('should be `hello` value', function (done) {
+              value.should.eql('hello');
+              done();
+            });
+            describe('get `key1` key record', function () {
+              it('should be `hello` value', function (done) {
+                db.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  done();
+                });
+              });
+            });
+          });
+        });
+        describe('step', function () {
+          var visitor_call_cnt = 0;
+          describe('get current record', function () {
+            var key;
+            var value;
+            before(function (done) {
+              cur.accept({
+                visitor: function () {
+                  visitor_call_cnt++;
+                  key = arguments[0];
+                  value = arguments[1];
+                  return Visitor.NOP;
+                },
+                writable: false,
+                step: true
+              }, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+            it('should be `1` call `visitor`', function (done) {
+              visitor_call_cnt.should.eql(1);
+              done();
+            });
+            it('should be `key1` key', function (done) {
+              key.should.eql('key1');
+              done();
+            });
+            it('should be `hello` value', function (done) {
+              value.should.eql('hello');
+              done();
+            });
+            describe('get `key1` key record', function () {
+              it('should be `hello` value', function (done) {
+                db.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  done();
+                });
+              });
+            });
+            describe('update current record', function () {
+              before(function (done) {
+                cur.accept({
+                  visitor: function () {
+                    visitor_call_cnt++;
+                    key = arguments[0];
+                    value = arguments[1];
+                    return 'dio';
+                  },
+                  writable: false,
+                  step: true
+                }, function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+              it('should be `2` call `visitor`', function (done) {
+                visitor_call_cnt.should.eql(2);
+                done();
+              });
+              it('should be `key2` key', function (done) {
+                key.should.eql('key2');
+                done();
+              });
+              it('should be `world` value', function (done) {
+                value.should.eql('world');
+                done();
+              });
+              describe('get `key2` key record', function () {
+                it('should be `world` value', function (done) {
+                  db.get({ key: 'key2' }, function (err, value) {
+                    if (err) { return done(err); }
+                    value.should.eql('world');
+                    done();
+                  });
+                });
+              });
+              describe('remove current record', function () {
+                before(function (done) {
+                  cur.accept({
+                    visitor: function () {
+                      visitor_call_cnt++;
+                      key = arguments[0];
+                      value = arguments[1];
+                      return Visitor.REMOVE;
+                    },
+                    writable: false,
+                    step: true
+                  }, function (err) {
+                    if (err) { return done(err); }
+                    done();
+                  });
+                });
+                it('should be `3` call `visitor`', function (done) {
+                  visitor_call_cnt.should.eql(3);
+                  done();
+                });
+                it('should be `key3` key', function (done) {
+                  key.should.eql('key3');
+                  done();
+                });
+                it('should be `hoge` value', function (done) {
+                  value.should.eql('hoge');
+                  done();
+                });
+                describe('get `key3` key record', function () {
+                  it('should be `hoge` value', function (done) {
+                    db.get({ key: 'key3' }, function (err, value) {
+                      if (err) { return done(err); }
+                      value.should.eql('hoge');
+                      done();
+                    });
+                  });
+                });
+                describe('get record count', function () {
+                  it('should be `3` count', function (done) {
+                    db.count(function (err, cnt) {
+                      if (err) { return done(err); }
+                      cnt.should.eql(3);
+                      done();
+                    });
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+      describe('writable', function () {
+        describe('no step', function () {
+          var visitor_call_cnt = 0;
+          var cur;
+          before(function (done) {
+            Cursor.create(db, function (err, c) {
+              if (err) { return done(err); }
+              cur = c;
+              cur.jump(function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+          });
+          describe('get current record', function () {
+            var key;
+            var value;
+            before(function (done) {
+              cur.accept({
+                visitor: function () {
+                  visitor_call_cnt++;
+                  key = arguments[0];
+                  value = arguments[1];
+                  return Visitor.NOP;
+                },
+                writable: true
+              }, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+            after(function (done) {
+              visitor_call_cnt = 0;
+              done();
+            });
+            it('should be `1` call `visitor`', function (done) {
+              visitor_call_cnt.should.eql(1);
+              done();
+            });
+            it('should be `key1` key', function (done) {
+              key.should.eql('key1');
+              done();
+            });
+            it('should be `hello` value', function (done) {
+              value.should.eql('hello');
+              done();
+            });
+            describe('get `key1` key record', function () {
+              it('should be `hello` value', function (done) {
+                db.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  done();
+                });
+              });
+            });
+          });
+          describe('update current record', function () {
+            var key;
+            var value;
+            before(function (done) {
+              cur.accept({
+                visitor: function () {
+                  visitor_call_cnt++;
+                  key = arguments[0];
+                  value = arguments[1];
+                  return 'the';
+                },
+                writable: true
+              }, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+            after(function (done) {
+              visitor_call_cnt = 0;
+              done();
+            });
+            it('should be `1` call `visitor`', function (done) {
+              visitor_call_cnt.should.eql(1);
+              done();
+            });
+            it('should be `key1` key', function (done) {
+              key.should.eql('key1');
+              done();
+            });
+            it('should be `hello` value', function (done) {
+              value.should.eql('hello');
+              done();
+            });
+            describe('get `key1` key record', function () {
+              it('should be `the` value', function (done) {
+                db.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('the');
+                  done();
+                });
+              });
+            });
+          });
+          describe('remove current record', function () {
+            var key;
+            var value;
+            before(function (done) {
+              cur.accept({
+                visitor: function () {
+                  visitor_call_cnt++;
+                  key = arguments[0];
+                  value = arguments[1];
+                  return Visitor.REMOVE;
+                },
+                writable: true
+              }, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+            after(function (done) {
+              visitor_call_cnt = 0;
+              done();
+            });
+            it('should be `1` call `visitor`', function (done) {
+              visitor_call_cnt.should.eql(1);
+              done();
+            });
+            it('should be `key1` key', function (done) {
+              key.should.eql('key1');
+              done();
+            });
+            it('should be `the` value', function (done) {
+              value.should.eql('the');
+              done();
+            });
+            describe('get `key1` key record', function () {
+              it('should be `NOREC` error', function (done) {
+                db.get({ key: 'key1' }, function (err, value) {
+                  err.should.have.property('code');
+                  err.code.should.eql(Error.NOREC);
+                  done();
+                });
+              });
+            });
+          });
+        });
+        describe('step', function () {
+          var visitor_call_cnt = 0;
+          var cur;
+          before(function (done) {
+            db.set({ key: 'key1', value: 'hello' }, function (err) {
+              if (err) { return done(err); }
+              db.set({ key: 'key2', value: 'world' }, function (err) {
+                if (err) { return done(err); }
+                db.set({ key: 'key3', value: 'hoge' }, function (err) {
+                  if (err) { return done(err); }
+                  Cursor.create(db, function (err, c) {
+                    if (err) { return done(err); }
+                    cur = c;
+                    cur.jump(function (err) {
+                      if (err) { return done(err); }
+                      done();
+                    });
+                  });
+                });
+              });
+            });
+          });
+          describe('get current record', function () {
+            var key;
+            var value;
+            before(function (done) {
+              cur.accept({
+                visitor: function () {
+                  visitor_call_cnt++;
+                  key = arguments[0];
+                  value = arguments[1];
+                  return Visitor.NOP;
+                },
+                writable: true,
+                step: true
+              }, function (err) {
+                if (err) { return done(err); }
+                done();
+              });
+            });
+            it('should be `1` call `visitor`', function (done) {
+              visitor_call_cnt.should.eql(1);
+              done();
+            });
+            it('should be `key1` key', function (done) {
+              key.should.eql('key1');
+              done();
+            });
+            it('should be `hello` value', function (done) {
+              value.should.eql('hello');
+              done();
+            });
+            describe('get `key1` key record', function () {
+              it('should be `hello` value', function (done) {
+                db.get({ key: 'key1' }, function (err, value) {
+                  if (err) { return done(err); }
+                  value.should.eql('hello');
+                  done();
+                });
+              });
+            });
+            describe('update current record', function () {
+              before(function (done) {
+                cur.accept({
+                  visitor: function () {
+                    visitor_call_cnt++;
+                    key = arguments[0];
+                    value = arguments[1];
+                    return 'dio';
+                  },
+                  writable: true,
+                  step: true
+                }, function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+              it('should be `2` call `visitor`', function (done) {
+                visitor_call_cnt.should.eql(2);
+                done();
+              });
+              it('should be `key2` key', function (done) {
+                key.should.eql('key2');
+                done();
+              });
+              it('should be `world` value', function (done) {
+                value.should.eql('world');
+                done();
+              });
+              describe('get `key2` key record', function () {
+                it('should be `dio` value', function (done) {
+                  db.get({ key: 'key2' }, function (err, value) {
+                    if (err) { return done(err); }
+                    value.should.eql('dio');
+                    done();
+                  });
+                });
+              });
+              describe('remove current record', function () {
+                before(function (done) {
+                  cur.accept({
+                    visitor: function () {
+                      visitor_call_cnt++;
+                      key = arguments[0];
+                      value = arguments[1];
+                      return Visitor.REMOVE;
+                    },
+                    writable: true,
+                    step: true
+                  }, function (err) {
+                    if (err) { return done(err); }
+                    done();
+                  });
+                });
+                it('should be `3` call `visitor`', function (done) {
+                  visitor_call_cnt.should.eql(3);
+                  done();
+                });
+                it('should be `key3` key', function (done) {
+                  key.should.eql('key3');
+                  done();
+                });
+                it('should be `hoge` value', function (done) {
+                  value.should.eql('hoge');
+                  done();
+                });
+                describe('get `key3` key record', function () {
+                  it('should be `NOREC` error', function (done) {
+                    db.get({ key: 'key3' }, function (err, value) {
+                      err.should.have.property('code');
+                      err.code.should.eql(Error.NOREC);
+                      done();
+                    });
+                  });
+                });
+                describe('get record count', function () {
+                  it('should be `2` count', function (done) {
+                    db.count(function (err, cnt) {
+                      if (err) { return done(err); }
+                      cnt.should.eql(2);
+                      done();
+                    });
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+      describe('parameter check', function () {
+        var cur;
+        before(function (done) {
+          Cursor.create(db, function (err, c) {
+            if (err) { return done(err); }
+            cur = c;
+            done();
+          });
+        });
+        describe('no specific', function () {
+          it('operation should be occured exception', function (done) {
+            try {
+              cur.accept();
+            } catch (e) {
+              error(e);
+              done();
+            }
+          });
+        });
+        describe('no specific `visitor`', function () {
+          it('operation should be occured exception', function (done) {
+            try {
+              cur.accept({ writable: false, step: true }, function (err) {});
+            } catch (e) {
+              error(e);
+              done();
+            }
+          });
+        });
+        describe('specific `visitor` is number type', function () {
+          it('operation should be occured exception', function (done) {
+            try {
+              cur.accept({ visitor: 1, writable: false, step: true }, function (err) {});
+            } catch (e) {
+              error(e);
+              done();
+            }
+          });
+        });
+        describe('specific `writable` is not boolean type', function () {
+          it('operation should be occured exception', function (done) {
+            try {
+              cur.accept({
+                visitor: function (key, value) { return Visitor.NOP; }, 
+                writable: 11, 
+                step: true 
+              }, function (err) {});
+            } catch (e) {
+              error(e);
+              done();
+            }
+          });
+        });
+        describe('specific `step` is not boolean type', function () {
+          it('operation should be occured exception', function (done) {
+            try {
+              cur.accept({
+                visitor: function (key, value) { return Visitor.NOP; }, 
+                writable: false,
+                step: 'string'
+              }, function (err) {});
+            } catch (e) {
+              error(e);
+              done();
+            }
+          });
+        });
+      });
+    });
+  });
 
 });
+
+
 

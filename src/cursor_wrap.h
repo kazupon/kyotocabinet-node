@@ -15,6 +15,7 @@ using namespace kyotocabinet;
 
 
 class PolyDBWrap;
+class AsyncCursorVisitor;
 
 class CursorWrap : public ObjectWrap {
   public:
@@ -25,6 +26,7 @@ class CursorWrap : public ObjectWrap {
   private:
     PolyDBWrap *wrapdb_;
     PolyDB::Cursor *cursor_;
+    AsyncCursorVisitor *visitor_;
 
     CursorWrap(PolyDB::Cursor *cursor);
     ~CursorWrap();
@@ -41,6 +43,7 @@ class CursorWrap : public ObjectWrap {
     static Handle<Value> Remove(const Arguments &args);
     static Handle<Value> Seize(const Arguments &args);
     static Handle<Value> SetValue(const Arguments &args);
+    static Handle<Value> Accept(const Arguments &args);
 
     static void OnWork(uv_work_t *work_req);
     static void OnWorkDone(uv_work_t *work_req);
