@@ -306,7 +306,7 @@ Handle<Value> CursorWrap::New(const Arguments &args) {
 
   if ((args.Length() == 0) || (args.Length() == 1 && args[0]->IsFunction())) {
     ThrowException(Exception::Error(String::New("Invalid parameter")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   Local<String> ctor_sym = String::NewSymbol("constructor");
@@ -314,7 +314,7 @@ Handle<Value> CursorWrap::New(const Arguments &args) {
   String::Utf8Value ctorName(args[0]->ToObject()->Get(ctor_sym)->ToObject()->Get(name_sym)->ToString());
   if (strcmp("DB", *ctorName)) {
     ThrowException(Exception::Error(String::New("Invalid parameter")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   if (args.Length() == 1 && !args[0]->IsFunction()) {
@@ -338,7 +338,7 @@ Handle<Value> CursorWrap::New(const Arguments &args) {
     SendAsyncRequest(req);
   }
 
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> CursorWrap::Create(const Arguments &args) {
@@ -372,7 +372,7 @@ Handle<Value> CursorWrap::Jump(const Arguments &args) {
        (args.Length() == 1 && (!args[0]->IsString() & !args[0]->IsFunction())) ||
        (args.Length() == 2 && (!args[0]->IsString() | !args[1]->IsFunction())) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
@@ -395,7 +395,7 @@ Handle<Value> CursorWrap::Jump(const Arguments &args) {
 
   wrapCur->Ref();
 
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> CursorWrap::JumpBack(const Arguments &args) {
@@ -409,7 +409,7 @@ Handle<Value> CursorWrap::JumpBack(const Arguments &args) {
        (args.Length() == 1 && (!args[0]->IsString() & !args[0]->IsFunction())) ||
        (args.Length() == 2 && (!args[0]->IsString() | !args[1]->IsFunction())) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
@@ -432,7 +432,7 @@ Handle<Value> CursorWrap::JumpBack(const Arguments &args) {
 
   wrapCur->Ref();
 
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> CursorWrap::Step(const Arguments &args) {
@@ -445,7 +445,7 @@ Handle<Value> CursorWrap::Step(const Arguments &args) {
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && !args[0]->IsFunction()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
@@ -457,7 +457,7 @@ Handle<Value> CursorWrap::Step(const Arguments &args) {
 
   wrapCur->Ref();
 
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> CursorWrap::StepBack(const Arguments &args) {
@@ -470,7 +470,7 @@ Handle<Value> CursorWrap::StepBack(const Arguments &args) {
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && !args[0]->IsFunction()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
@@ -482,7 +482,7 @@ Handle<Value> CursorWrap::StepBack(const Arguments &args) {
 
   wrapCur->Ref();
 
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> CursorWrap::Get(const Arguments &args) {
@@ -496,7 +496,7 @@ Handle<Value> CursorWrap::Get(const Arguments &args) {
        (args.Length() == 1 && (!args[0]->IsBoolean() & !args[0]->IsFunction())) ||
        (args.Length() == 2 && (!args[0]->IsBoolean() | !args[1]->IsFunction())) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
@@ -517,7 +517,7 @@ Handle<Value> CursorWrap::Get(const Arguments &args) {
 
   wrapCur->Ref();
 
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> CursorWrap::GetKey(const Arguments &args) {
@@ -531,7 +531,7 @@ Handle<Value> CursorWrap::GetKey(const Arguments &args) {
        (args.Length() == 1 && (!args[0]->IsBoolean() & !args[0]->IsFunction())) ||
        (args.Length() == 2 && (!args[0]->IsBoolean() | !args[1]->IsFunction())) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
@@ -552,7 +552,7 @@ Handle<Value> CursorWrap::GetKey(const Arguments &args) {
 
   wrapCur->Ref();
 
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> CursorWrap::GetValue(const Arguments &args) {
@@ -566,7 +566,7 @@ Handle<Value> CursorWrap::GetValue(const Arguments &args) {
        (args.Length() == 1 && (!args[0]->IsBoolean() & !args[0]->IsFunction())) ||
        (args.Length() == 2 && (!args[0]->IsBoolean() | !args[1]->IsFunction())) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
@@ -587,7 +587,7 @@ Handle<Value> CursorWrap::GetValue(const Arguments &args) {
 
   wrapCur->Ref();
 
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> CursorWrap::Remove(const Arguments &args) {
@@ -600,7 +600,7 @@ Handle<Value> CursorWrap::Remove(const Arguments &args) {
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && !args[0]->IsFunction()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
@@ -612,7 +612,7 @@ Handle<Value> CursorWrap::Remove(const Arguments &args) {
 
   wrapCur->Ref();
 
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> CursorWrap::Seize(const Arguments &args) {
@@ -625,7 +625,7 @@ Handle<Value> CursorWrap::Seize(const Arguments &args) {
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && !args[0]->IsFunction()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
@@ -637,7 +637,7 @@ Handle<Value> CursorWrap::Seize(const Arguments &args) {
 
   wrapCur->Ref();
 
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> CursorWrap::SetValue(const Arguments &args) {
@@ -651,7 +651,7 @@ Handle<Value> CursorWrap::SetValue(const Arguments &args) {
        (args.Length() == 2 && (!args[0]->IsString() | (!args[1]->IsBoolean() & !args[1]->IsFunction()))) ||
        (args.Length() == 3 && (!args[0]->IsString() | !args[1]->IsBoolean() | !args[2]->IsFunction())) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
@@ -676,7 +676,7 @@ Handle<Value> CursorWrap::SetValue(const Arguments &args) {
 
   wrapCur->Ref();
 
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> CursorWrap::Accept(const Arguments &args) {
@@ -699,7 +699,7 @@ Handle<Value> CursorWrap::Accept(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && (args[0]->ToObject()->Has(step_sym) & !args[0]->ToObject()->Get(step_sym)->IsBoolean())) ||
        (args.Length() == 2 && args[0]->IsObject() && (args[0]->ToObject()->Has(writable_sym) & !args[0]->ToObject()->Get(writable_sym)->IsBoolean())) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
@@ -810,7 +810,7 @@ Handle<Value> CursorWrap::Accept(const Arguments &args) {
   } 
   */
 
-  return args.This();
+  return scope.Close(args.This());
 }
 
 

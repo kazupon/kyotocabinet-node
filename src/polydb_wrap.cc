@@ -19,6 +19,7 @@ namespace kc = kyotocabinet;
 
 #define DEFINE_FUNC(Name, Type)                                             \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                   \
+    TRACE("%s\n", #Name);                                                   \
     HandleScope scope;                                                      \
                                                                             \
     PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());          \
@@ -27,7 +28,7 @@ namespace kc = kyotocabinet;
     if ((args.Length() == 1 && (!args[0]->IsObject())                       \
                               | !args[0]->IsFunction())) {                  \
       ThrowException(Exception::TypeError(String::New("Bad argument")));    \
-      return args.This();                                                   \
+      return scope.Close(args.This());                                      \
     }                                                                       \
                                                                             \
     kc_req_t *req = (kc_req_t *)malloc(sizeof(kc_req_t));                   \
@@ -47,11 +48,12 @@ namespace kc = kyotocabinet;
     TRACE("uv_queue_work: ret=%d\n", ret);                                  \
                                                                             \
     obj->Ref();                                                             \
-    return args.This();                                                     \
+    return scope.Close(args.This());                                        \
   }                                                                         \
 
 #define DEFINE_CHAR_PARAM_FUNC(Name, Type)                                            \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                             \
+    TRACE("%s\n", #Name);                                                             \
     HandleScope scope;                                                                \
                                                                                       \
     PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());                    \
@@ -60,7 +62,7 @@ namespace kc = kyotocabinet;
     if ( (args.Length() == 0) ||                                                      \
          (args.Length() == 1 && (!args[0]->IsString()) | !args[0]->IsFunction()) ) {  \
       ThrowException(Exception::TypeError(String::New("Bad argument")));              \
-      return args.This();                                                             \
+      return scope.Close(args.This());                                                \
     }                                                                                 \
                                                                                       \
     kc_char_cmn_req_t *req = (kc_char_cmn_req_t *)malloc(sizeof(kc_char_cmn_req_t));  \
@@ -90,7 +92,7 @@ namespace kc = kyotocabinet;
     TRACE("uv_queue_work: ret=%d\n", ret);                                            \
                                                                                       \
     obj->Ref();                                                                       \
-    return args.This();                                                               \
+    return scope.Close(args.This());                                                  \
   }                                                                                   \
 
 #define DEFINE_BOOL_PARAM_FUNC(Name, Method, INIT_VALUE)                                                                \
@@ -104,7 +106,7 @@ namespace kc = kyotocabinet;
     if ( (args.Length() == 0) ||                                                                                        \
          (args.Length() == 1 && (!args[0]->IsBoolean()) & !args[0]->IsFunction()) ) {                                   \
       ThrowException(Exception::TypeError(String::New("Bad argument")));                                                \
-      return args.This();                                                                                               \
+      return scope.Close(args.This());                                                                                  \
     }                                                                                                                   \
                                                                                                                         \ 
     PolyDB::Error::Code result = PolyDB::Error::SUCCESS;                                                                \
@@ -154,6 +156,7 @@ namespace kc = kyotocabinet;
 
 #define DEFINE_RET_FUNC(Name, Type, REQ_TYPE, INIT_VALUE)                   \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                   \
+    TRACE("%s\n", #Name);                                                   \
     HandleScope scope;                                                      \
                                                                             \
     PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());          \
@@ -162,7 +165,7 @@ namespace kc = kyotocabinet;
     if ((args.Length() == 1 && (!args[0]->IsObject())                       \
                               | !args[0]->IsFunction())) {                  \
       ThrowException(Exception::TypeError(String::New("Bad argument")));    \
-      return args.This();                                                   \
+      return scope.Close(args.This());                                      \
     }                                                                       \
                                                                             \
     REQ_TYPE *req = (REQ_TYPE *)malloc(sizeof(REQ_TYPE));                   \
@@ -183,11 +186,12 @@ namespace kc = kyotocabinet;
     TRACE("uv_queue_work: ret=%d\n", ret);                                  \
                                                                             \
     obj->Ref();                                                             \
-    return args.This();                                                     \
+    return scope.Close(args.This());                                        \
   }                                                                         \
 
 #define DEFINE_KV_K_ONLY(Name, Type)                                            \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                       \
+    TRACE("%s\n", #Name);                                                       \
     HandleScope scope;                                                          \
                                                                                 \
     PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());              \
@@ -206,7 +210,7 @@ namespace kc = kyotocabinet;
           && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym)           \
           && !args[0]->ToObject()->Get(key_sym)->IsString())) {                 \
       ThrowException(Exception::TypeError(String::New("Bad argument")));        \
-      return args.This();                                                       \
+      return scope.Close(args.This());                                          \
     }                                                                           \
                                                                                 \
     kc_kv_req_t *req = (kc_kv_req_t *)malloc(sizeof(kc_kv_req_t));              \
@@ -242,11 +246,12 @@ namespace kc = kyotocabinet;
     TRACE("uv_queue_work: ret=%d\n", ret);                                      \
                                                                                 \
     obj->Ref();                                                                 \
-    return args.This();                                                         \
+    return scope.Close(args.This());                                            \
   }                                                                             \
 
 #define DEFINE_KV_FUNC(Name, Type)                                              \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                       \
+    TRACE("%s\n", #Name);                                                       \
     HandleScope scope;                                                          \
                                                                                 \
     PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());              \
@@ -276,7 +281,7 @@ namespace kc = kyotocabinet;
           && args[0]->ToObject()->Has(value_sym)                                \ 
           && !args[0]->ToObject()->Get(value_sym)->IsString())) {               \
       ThrowException(Exception::TypeError(String::New("Bad argument")));        \
-      return args.This();                                                       \
+      return scope.Close(args.This());                                          \
     }                                                                           \
                                                                                 \
     kc_kv_req_t *req = (kc_kv_req_t *)malloc(sizeof(kc_kv_req_t));              \
@@ -321,7 +326,7 @@ namespace kc = kyotocabinet;
     TRACE("uv_queue_work: ret=%d\n", ret);                                      \
                                                                                 \
     obj->Ref();                                                                 \
-    return args.This();                                                         \
+    return scope.Close(args.This());                                            \
   }                                                                             \
 
 #define DO_EXECUTE(Method)              \
@@ -348,24 +353,23 @@ namespace kc = kyotocabinet;
 #define DO_RET_EXECUTE(Method, WorkReq)                             \
   kc_ret_req_t *req = static_cast<kc_ret_req_t*>(WorkReq->data);    \
   req->ret = db->Method();                                          \
-  TRACE("ret = %d\n", req->ret);                                    \
+  TRACE("%s: ret = %d\n", #Method, req->ret);                       \
   if (req->ret == -1) {                                             \
     req->result = db->error().code();                               \
   }                                                                 \
 
-#define DO_KV_V_RET_EXECUTE(Method, WorkReq)                            \
-  kc_kv_req_t *req = static_cast<kc_kv_req_t*>(WorkReq->data);          \
-  TRACE("key = %s\n", req->key);                                        \
-  size_t value_size;                                                    \
-  if (req->key == NULL) {                                               \
-    req->result = PolyDB::Error::INVALID;                               \
-  } else {                                                              \
-    req->value = db->Method(req->key, strlen(req->key), &value_size);   \
-    TRACE("return value = %s, size = %d\n", req->value, value_size);    \
-    if (req->value == NULL) {                                           \
-      req->result = db->error().code();                                 \
-    }                                                                   \
-  }                                                                     \
+#define DO_KV_V_RET_EXECUTE(Method, WorkReq)                                         \
+  kc_kv_req_t *req = static_cast<kc_kv_req_t*>(WorkReq->data);                       \
+  size_t value_size;                                                                 \
+  if (req->key == NULL) {                                                            \
+    req->result = PolyDB::Error::INVALID;                                            \
+  } else {                                                                           \
+    req->value = db->Method(req->key, strlen(req->key), &value_size);                \
+    TRACE("%s: return value = %s, size = %d\n", #Method, req->value, value_size);    \
+    if (req->value == NULL) {                                                        \
+      req->result = db->error().code();                                              \
+    }                                                                                \
+  }                                                                                  \
 
 #define DO_KV_EXECUTE(Method, WorkReq)                            \
   kc_kv_req_t *req = static_cast<kc_kv_req_t*>(WorkReq->data);    \
@@ -829,7 +833,7 @@ Handle<Value> PolyDBWrap::New(const Arguments &args) {
   PolyDBWrap *obj = new PolyDBWrap();
   obj->Wrap(args.This());
 
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> PolyDBWrap::Open(const Arguments &args) {
@@ -875,7 +879,7 @@ Handle<Value> PolyDBWrap::Open(const Arguments &args) {
   TRACE("uv_queue_work: ret=%d\n", ret);
 
   obj->Ref();
-  return args.This();
+  return scope.Close(args.This());
 }
 
 DEFINE_FUNC(Close, KC_CLOSE);
@@ -899,7 +903,7 @@ Handle<Value> PolyDBWrap::Remove(const Arguments &args) {
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_char_cmn_req_t *req = (kc_char_cmn_req_t *)malloc(sizeof(kc_char_cmn_req_t));
@@ -934,7 +938,7 @@ Handle<Value> PolyDBWrap::Remove(const Arguments &args) {
   TRACE("uv_queue_work: ret=%d\n", ret);
 
   obj->Ref();
-  return args.This();
+  return scope.Close(args.This());
 }
 
 DEFINE_KV_FUNC(Replace, KC_REPLACE);
@@ -960,7 +964,7 @@ Handle<Value> PolyDBWrap::Increment(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(num_sym) && !args[0]->ToObject()->Get(num_sym)->IsNumber()) || 
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(orig_sym) && !args[0]->ToObject()->Get(orig_sym)->IsNumber()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_increment_req_t *increment_req = (kc_increment_req_t *)malloc(sizeof(kc_increment_req_t));
@@ -1021,7 +1025,7 @@ Handle<Value> PolyDBWrap::Increment(const Arguments &args) {
   TRACE("uv_queue_work: ret=%d\n", ret);
 
   obj->Ref();
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> PolyDBWrap::IncrementDouble(const Arguments &args) {
@@ -1044,7 +1048,7 @@ Handle<Value> PolyDBWrap::IncrementDouble(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(num_sym) && !args[0]->ToObject()->Get(num_sym)->IsNumber()) || 
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(orig_sym) && !args[0]->ToObject()->Get(orig_sym)->IsNumber()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_increment_double_req_t *inc_dbl_req = (kc_increment_double_req_t *)malloc(sizeof(kc_increment_double_req_t));
@@ -1093,7 +1097,7 @@ Handle<Value> PolyDBWrap::IncrementDouble(const Arguments &args) {
   TRACE("uv_queue_work: ret=%d\n", ret);
 
   obj->Ref();
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> PolyDBWrap::Cas(const Arguments &args) {
@@ -1116,7 +1120,7 @@ Handle<Value> PolyDBWrap::Cas(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(oval_sym) && !args[0]->ToObject()->Get(oval_sym)->IsString()) || 
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(nval_sym) && !args[0]->ToObject()->Get(nval_sym)->IsString()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_cas_req_t *cas_req = (kc_cas_req_t *)malloc(sizeof(kc_cas_req_t));
@@ -1173,7 +1177,7 @@ Handle<Value> PolyDBWrap::Cas(const Arguments &args) {
   TRACE("uv_queue_work: ret=%d\n", ret);
 
   obj->Ref();
-  return args.This();
+  return scope.Close(args.This());
 }
 
 DEFINE_RET_FUNC(Count, KC_COUNT, kc_ret_req_t, -1);
@@ -1195,7 +1199,7 @@ Handle<Value> PolyDBWrap::Check(const Arguments &args) {
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_check_req_t *check_req = (kc_check_req_t *)malloc(sizeof(kc_check_req_t));
@@ -1231,7 +1235,7 @@ Handle<Value> PolyDBWrap::Check(const Arguments &args) {
   TRACE("uv_queue_work: ret=%d\n", ret);
 
   obj->Ref();
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> PolyDBWrap::GetBulk(const Arguments &args) {
@@ -1251,7 +1255,7 @@ Handle<Value> PolyDBWrap::GetBulk(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && !args[0]->ToObject()->Get(keys_sym)->IsArray()) || 
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_get_bulk_req_t *req = (kc_get_bulk_req_t *)malloc(sizeof(kc_get_bulk_req_t));
@@ -1291,7 +1295,7 @@ Handle<Value> PolyDBWrap::GetBulk(const Arguments &args) {
   TRACE("uv_queue_work: ret=%d\n", ret);
 
   obj->Ref();
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> PolyDBWrap::SetBulk(const Arguments &args) {
@@ -1311,7 +1315,7 @@ Handle<Value> PolyDBWrap::SetBulk(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(recs_sym) && !args[0]->ToObject()->Get(recs_sym)->IsObject()) || 
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_set_bulk_req_t *req = (kc_set_bulk_req_t *)malloc(sizeof(kc_set_bulk_req_t));
@@ -1351,7 +1355,7 @@ Handle<Value> PolyDBWrap::SetBulk(const Arguments &args) {
   TRACE("uv_queue_work: ret=%d\n", ret);
 
   obj->Ref();
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> PolyDBWrap::RemoveBulk(const Arguments &args) {
@@ -1371,7 +1375,7 @@ Handle<Value> PolyDBWrap::RemoveBulk(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && !args[0]->ToObject()->Get(keys_sym)->IsArray()) || 
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_remove_bulk_req_t *req = (kc_remove_bulk_req_t *)malloc(sizeof(kc_remove_bulk_req_t));
@@ -1411,7 +1415,7 @@ Handle<Value> PolyDBWrap::RemoveBulk(const Arguments &args) {
   TRACE("uv_queue_work: ret=%d\n", ret);
 
   obj->Ref();
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> PolyDBWrap::MatchPrefix(const Arguments &args) {
@@ -1431,7 +1435,7 @@ Handle<Value> PolyDBWrap::MatchPrefix(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(prefix_sym) && !args[0]->ToObject()->Get(prefix_sym)->IsString()) || 
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && !args[0]->ToObject()->Get(max_sym)->IsNumber()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_match_cmn_req_t *req = (kc_match_cmn_req_t *)malloc(sizeof(kc_match_cmn_req_t));
@@ -1473,7 +1477,7 @@ Handle<Value> PolyDBWrap::MatchPrefix(const Arguments &args) {
   TRACE("uv_queue_work: ret=%d\n", ret);
 
   obj->Ref();
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> PolyDBWrap::MatchRegex(const Arguments &args) {
@@ -1493,7 +1497,7 @@ Handle<Value> PolyDBWrap::MatchRegex(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(regex_sym) && !args[0]->ToObject()->Get(regex_sym)->IsRegExp()) || 
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && !args[0]->ToObject()->Get(max_sym)->IsNumber()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_match_cmn_req_t *req = (kc_match_cmn_req_t *)malloc(sizeof(kc_match_cmn_req_t));
@@ -1535,7 +1539,7 @@ Handle<Value> PolyDBWrap::MatchRegex(const Arguments &args) {
   TRACE("uv_queue_work: ret=%d\n", ret);
 
   obj->Ref();
-  return args.This();
+  return scope.Close(args.This());
 }
 
 Handle<Value> PolyDBWrap::MatchSimilar(const Arguments &args) {
@@ -1561,7 +1565,7 @@ Handle<Value> PolyDBWrap::MatchSimilar(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(range_sym) && !args[0]->ToObject()->Get(range_sym)->IsNumber()) || 
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(utf_sym) && !args[0]->ToObject()->Get(utf_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_match_similar_req_t *req = (kc_match_similar_req_t *)malloc(sizeof(kc_match_similar_req_t));
@@ -1617,7 +1621,7 @@ Handle<Value> PolyDBWrap::MatchSimilar(const Arguments &args) {
   TRACE("uv_queue_work: ret=%d\n", ret);
 
   obj->Ref();
-  return args.This();
+  return scope.Close(args.This());
 }
 
 DEFINE_CHAR_PARAM_FUNC(Copy, KC_COPY);
@@ -1639,7 +1643,7 @@ Handle<Value> PolyDBWrap::Merge(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(srcary_sym) && !args[0]->ToObject()->Get(srcary_sym)->IsArray()) || 
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(mode_sym) && !args[0]->ToObject()->Get(mode_sym)->IsNumber()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   kc_merge_req_t *req = (kc_merge_req_t *)malloc(sizeof(kc_merge_req_t));
@@ -1696,7 +1700,7 @@ Handle<Value> PolyDBWrap::Merge(const Arguments &args) {
   TRACE("uv_queue_work: ret=%d\n", ret);
 
   obj->Ref();
-  return args.This();
+  return scope.Close(args.This());
 }
 
 DEFINE_CHAR_PARAM_FUNC(DumpSnapshot, KC_DUMP_SNAPSHOT);
@@ -1722,7 +1726,7 @@ Handle<Value> PolyDBWrap::Accept(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   PolyDB::Error::Code result = PolyDB::Error::SUCCESS;
@@ -1832,7 +1836,7 @@ Handle<Value> PolyDBWrap::AcceptBulk(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   PolyDB::Error::Code result = PolyDB::Error::SUCCESS;
@@ -1930,7 +1934,7 @@ Handle<Value> PolyDBWrap::Iterate(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   PolyDB::Error::Code result = PolyDB::Error::SUCCESS;
@@ -2020,7 +2024,7 @@ Handle<Value> PolyDBWrap::Synchronize(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym) && !args[0]->ToObject()->Get(proc_sym)->IsFunction()) ||
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(hard_sym) && !args[0]->ToObject()->Get(hard_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   if ((args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym)) ||
@@ -2117,7 +2121,7 @@ Handle<Value> PolyDBWrap::Synchronize(const Arguments &args) {
     TRACE("uv_queue_work: ret=%d\n", ret);
 
     obj->Ref();
-    return args.This();
+    return scope.Close(args.This());
   }
 }
 
@@ -2138,7 +2142,7 @@ Handle<Value> PolyDBWrap::Occupy(const Arguments &args) {
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym) && !args[0]->ToObject()->Get(proc_sym)->IsFunction()) ||
        (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
-    return args.This();
+    return scope.Close(args.This());
   }
 
   if ((args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym)) ||
@@ -2235,7 +2239,7 @@ Handle<Value> PolyDBWrap::Occupy(const Arguments &args) {
     TRACE("uv_queue_work: ret=%d\n", ret);
 
     obj->Ref();
-    return args.This();
+    return scope.Close(args.This());
   }
 }
 
