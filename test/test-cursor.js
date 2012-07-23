@@ -211,7 +211,7 @@ describe('Cursor class tests', function () {
         });
       });
       afterEach(function (done) {
-        cur = null;
+        //cur = null;
         done();
       });
       describe('jump to head record', function () {
@@ -335,7 +335,7 @@ describe('Cursor class tests', function () {
           });
         });
         afterEach(function (done) {
-          cur = null;
+          //cur = null;
           done();
         });
         describe('jump back to last record', function () {
@@ -427,7 +427,7 @@ describe('Cursor class tests', function () {
         });
       });
       afterEach(function (done) {
-        cur = null;
+        //cur = null;
         done();
       });
       describe('step to next record', function () {
@@ -564,7 +564,7 @@ describe('Cursor class tests', function () {
           });
         });
         afterEach(function (done) {
-          cur = null;
+          //cur = null;
           done();
         });
         describe('step back to prev record', function () {
@@ -673,7 +673,7 @@ describe('Cursor class tests', function () {
           });
         });
         after(function (done) {
-          cur = null;
+          //cur = null;
           done();
         });
         it('should be `key1` key and `hello` value', function (done) {
@@ -708,7 +708,7 @@ describe('Cursor class tests', function () {
           });
         });
         after(function (done) {
-          cur = null;
+          //cur = null;
           done();
         });
         it('should be `key1` key and `hello` value', function (done) {
@@ -846,7 +846,7 @@ describe('Cursor class tests', function () {
           });
         });
         after(function (done) {
-          cur = null;
+          //cur = null;
           done();
         });
         it('should be `key1` key', function (done) {
@@ -949,7 +949,7 @@ describe('Cursor class tests', function () {
           });
         });
         after(function (done) {
-          cur = null;
+          //cur = null;
           done();
         });
         it('should be `hello` value', function (done) {
@@ -1355,7 +1355,7 @@ describe('Cursor class tests', function () {
           });
         });
         after(function (done) {
-          cur = null;
+          //cur = null;
           done();
         });
         it('should be `dio` value', function (done) {
@@ -1392,7 +1392,7 @@ describe('Cursor class tests', function () {
           });
         });
         after(function (done) {
-          cur = null;
+          //cur = null;
           done();
         });
         it('should be and `dio` value', function (done) {
@@ -2139,6 +2139,58 @@ describe('Cursor class tests', function () {
               error(e);
               done();
             }
+          });
+        });
+      });
+      describe('concurrency', function () {
+        describe('call count check', function () {
+          var cur;
+          var n = 1000
+          before(function (done) {
+            var recs = {};
+            for (var i = 0; i < n; i++) {
+              recs['key' + (i + 1)] = 'value' + (i + 1);
+            }
+            db.set_bulk({ recs: recs }, function (err) {
+              if (err) { return done(err); }
+              Cursor.create(db, function (err, c) {
+                if (err) { return done(err); }
+                cur = c;
+                done();
+              });
+            });
+          });
+          it('should be called', function (done) {
+            var id = setInterval(function () {
+              db.get({ key: 'key33' }, function (err, value) {
+                if (err) { return done(err); }
+                if (cnt === n) {
+                  clearInterval(id);
+                  done();
+                }
+              });
+            }, 5);
+            var cnt = 0;
+            cur.jump(function (err) {
+              if (err) { return done(err); }
+              (function fn (cur, cb) {
+                setTimeout(function () {
+                  cur.accept({
+                    visitor: function (key, value) {
+                      cnt++;
+                      key.should.be.a.ok;
+                      value.should.be.a.ok;
+                      return Visitor.NOP;
+                    },
+                    step: true
+                  }, function (err) {
+                    return (err ? cb() : fn(cur, cb));
+                  });
+                }, 5);
+              })(cur, function () {
+                cnt.should.eql(n);
+              });
+            });
           });
         });
       });
