@@ -97,19 +97,12 @@ public:
                                                  writable_(false), rv_(NULL), sp_(-1) {
     TRACE("ctor: %p\n", this);
     visitor_.Clear();
-    uv_async_init(loop_, &async_, AsyncCallback);
-    async_.data = this;
-    uv_unref((uv_handle_t *)&async_);
     pthread_cond_init(&cond_, NULL);
     TRACE("arguments: async_ = %p\n", &async_);
   }
   ~AsyncCursorVisitor() {
     TRACE("destor\n");
-    async_.data = NULL;
     pthread_cond_destroy(&cond_);
-    TRACE("handle close ...\n");
-    uv_close((uv_handle_t *)&async_, AsyncCloseCallback);
-    TRACE("... handle close done\n");
     loop_ = NULL;
   }
 private:
@@ -126,6 +119,10 @@ private:
     key_size_ = ksiz;
     value_ = (char *)vbuf;
     value_size_ = vsiz;
+
+    uv_async_init(loop_, &async_, AsyncCallback);
+    async_.data = this;
+    uv_ref((uv_handle_t *)&async_);
 
     TRACE("before: rv_ = %s(%p), sp_ = %d\n", rv_, rv_, sp_);
     uv_async_send(&async_);
@@ -244,6 +241,10 @@ private:
         visitor->rv_ = NULL;
       }
     }
+
+    uv_unref((uv_handle_t *)async);
+    uv_close((uv_handle_t *)async, AsyncCloseCallback);
+    async->data = NULL;
 
     TRACE("signal notify ... : rv_ = %p, sp_ = %d\n", visitor->rv_, visitor->sp_);
     pthread_cond_signal(&visitor->cond_);
