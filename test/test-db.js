@@ -5735,13 +5735,17 @@ describe('DB class tests', function () {
 
 
     // 
-    // cursor (sync)
+    // cursor (async)
     //
     describe('cursor', function () {
       describe('db not open', function () {
-        it('should exist', function (done) {
-          should.exist(new DB().cursor);
-          done();
+        it('should be exist', function (done) {
+          new DB().cursor(function (err, cur) {
+            if (err) { return done(err); }
+            cur.should.be.a.ok;
+            cur.should.be.an.instanceOf(Cursor);
+            done();
+          });
         });
       });
       describe('db open', function () {
@@ -5763,12 +5767,12 @@ describe('DB class tests', function () {
           });
         });
         it('should be exist', function (done) {
-          cdb.cursor.should.be.a.ok;
-          done();
-        });
-        it('should be an instance of `Cursor`', function (done) {
-          cdb.cursor.should.be.an.instanceOf(Cursor);
-          done();
+          cdb.cursor(function (err, cur) {
+            if (err) { return done(err); }
+            cur.should.be.a.ok;
+            cur.should.be.an.instanceOf(Cursor);
+            done();
+          });
         });
       });
     });
