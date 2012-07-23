@@ -586,6 +586,16 @@ typedef struct kc_boolean_cmn_req_t {
   bool flag;
 } kc_boolean_cmn_req_t;
 
+// file processor common request
+typedef struct kc_file_processor_cmn_req_t {
+  KC_REQ_FIELD
+  bool flag;
+  Persistent<Function> proc;
+} kc_file_processor_cmn_req_t;
+
+
+static pthread_mutex_t db_fproc_mtx = PTHREAD_MUTEX_INITIALIZER;
+
 
 class InternalVisitor : public PolyDB::Visitor {
 public:
@@ -716,39 +726,88 @@ private:
   */
 };
 
-class InternalFileProcessor : public PolyDB::FileProcessor {
+class AsyncFileProcessor : public PolyDB::FileProcessor {
 public:
-  Local<Function> &proc_;
+  Persistent<Function> proc_;
+  pthread_cond_t cond_;
+  int64_t count_;
+  int64_t size_;
+  char *path_;
+  bool rv_;
 
-  explicit InternalFileProcessor(Local<Function> &proc) : proc_(proc) {
+  explicit AsyncFileProcessor(uv_loop_t *loop) : loop_(loop), 
+    count_(-1), size_(-1), path_(NULL), rv_(false) {
     TRACE("ctor\n");
+    proc_.Clear();
+    pthread_cond_init(&cond_, NULL);
   }
-  ~InternalFileProcessor() {
-    TRACE("destor\n");
-  }
-private:
-  bool process(const std::string &path, int64_t count, int64_t size) {
-    HandleScope scope;
-    TRACE("arguments: path = %s, count = %ld, size = %ld\n", path.c_str(), count, size);
 
-    bool rv = false;
+  ~AsyncFileProcessor() {
+    TRACE("destor\n");
+    pthread_cond_destroy(&cond_);
+    loop_ = NULL;
+  }
+
+private:
+  uv_loop_t *loop_;
+  uv_async_t async_;
+
+  bool process(const std::string &path, int64_t count, int64_t size) {
+    TRACE("arguments: path = %s, count = %ld, size = %ld\n", path.c_str(), count, size);
+    rv_ = false;
+    path_ = (char *)path.c_str();
+    count_ = count;
+    size_ = size;
+
+    uv_async_init(loop_, &async_, AsyncProcessCallback);
+    async_.data = this;
+    uv_ref((uv_handle_t *)&async_);
+
+    TRACE("before: rv_ = %d\n", rv_);
+    uv_async_send(&async_);
+
+    TRACE("wating ... \n");
+    pthread_cond_wait(&cond_, &db_fproc_mtx);
+    TRACE("... callback done\n");
+
+    return rv_;
+  }
+
+  static void AsyncCloseCallback(uv_handle_t *handle) {
+    TRACE("handle = %p\n", handle);
+  }
+
+  static void AsyncProcessCallback(uv_async_t *async, int status) {
+    HandleScope scope;
+    TRACE("async = %p, status = %d\n", async, status);
+
+    AsyncFileProcessor *process = static_cast<AsyncFileProcessor*>(async->data);
+    assert(process != NULL);
+
     Local<Value> ret;
 
     Local<Value> argv[3] = { 
-      String::New(path.c_str(), path.length()),
-      Integer::New(count),
-      Integer::New(size),
+      String::New(process->path_, strlen(process->path_)),
+      Integer::New(process->count_),
+      Integer::New(process->size_),
     };
     TryCatch try_catch;
-    ret = proc_->Call(Context::GetCurrent()->Global(), 3, argv);
+    ret = process->proc_->Call(Context::GetCurrent()->Global(), 3, argv);
     if (try_catch.HasCaught()) {
       FatalException(try_catch);
     }
 
     if (!ret.IsEmpty() && ret->IsBoolean()) {
-      rv = ret->BooleanValue();
+      process->rv_ = ret->BooleanValue();
     }
-    return rv;
+
+    uv_unref((uv_handle_t *)async);
+    uv_close((uv_handle_t *)async, AsyncCloseCallback);
+    async->data = NULL;
+
+    TRACE("signal notify ... : rv_ = %d\n", process->rv_);
+    pthread_cond_signal(&process->cond_);
+    TRACE("... notify done\n");
   }
 };
 
@@ -809,13 +868,20 @@ StringMap* Obj2Map(const Local<Value> target) {
 
 PolyDBWrap::PolyDBWrap() {
   db_ = new PolyDB();
-  TRACE("ctor: db_ = %p\n", db_);
+  fproc_ = new AsyncFileProcessor(uv_default_loop());
+  TRACE("ctor: db_ = %p, fproc_ = %p\n", db_, fproc_);
+
   assert(db_ != NULL);
+  assert(fproc_ != NULL);
 }
 
 PolyDBWrap::~PolyDBWrap() {
   assert(db_ != NULL);
-  TRACE("destor: db_ = %p\n", db_);
+  assert(fproc_ != NULL);
+  TRACE("destor: db_ = %p, fproc_ = %p\n", db_, fproc_);
+
+  delete fproc_;
+  fproc_ = NULL;
   delete db_;
   db_ = NULL;
 }
@@ -2027,102 +2093,43 @@ Handle<Value> PolyDBWrap::Synchronize(const Arguments &args) {
     return scope.Close(args.This());
   }
 
-  if ((args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym)) ||
-      (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym))) {
+  kc_file_processor_cmn_req_t *req = (kc_file_processor_cmn_req_t *)malloc(sizeof(kc_file_processor_cmn_req_t));
+  req->type = KC_SYNCHRONIZE;
+  req->result = PolyDB::Error::SUCCESS;
+  req->wrapdb = obj;
+  req->flag = false;
+  req->proc.Clear();
+  req->cb.Clear();
 
-    PolyDB::Error::Code result = PolyDB::Error::SUCCESS;
-    Local<Function> cb;
-    bool hard = false;
-    Local<Function> proc;
-    cb.Clear();
-    proc.Clear();
-
-    if (args.Length() == 1) {
-      if (args[0]->IsFunction()) {
-        cb = Local<Function>::New(Handle<Function>::Cast(args[0]));
-      } else if (args[0]->IsObject()) {
-        if (args[0]->ToObject()->Has(proc_sym)) {
-          proc = Local<Function>::New(Handle<Function>::Cast(args[0]->ToObject()->Get(proc_sym)));
-        }
-        if (args[0]->ToObject()->Has(hard_sym)) {
-          hard = args[0]->ToObject()->Get(hard_sym)->BooleanValue();
-        }
-      }
-    } else {
-      if (args[0]->ToObject()->Has(proc_sym)) {
-        proc = Local<Function>::New(Handle<Function>::Cast(args[0]->ToObject()->Get(proc_sym)));
-      }
-      if (args[0]->ToObject()->Has(hard_sym)) {
-        hard = args[0]->ToObject()->Get(hard_sym)->BooleanValue();
-      }
-      cb = Local<Function>::New(Handle<Function>::Cast(args[1]));
-    }
-    
-    // TODO: should be non-blocking implements ...
-    // execute
-    InternalFileProcessor _proc(proc);
-    if (!obj->db_->synchronize(hard, &_proc)) {
-      result = obj->db_->error().code();
-    }
-
-    // init callback arguments.
-    Local<Value> argv[1] = { 
-      Local<Value>::New(Null()),
-    };
-
-    // set error to callback arguments.
-    if (result != PolyDB::Error::SUCCESS) {
-      const char *name = PolyDB::Error::codename(result);
-      Local<String> message = String::NewSymbol(name);
-      Local<Value> err = Exception::Error(message);
-      Local<Object> obj = err->ToObject();
-      obj->Set(String::NewSymbol("code"), Integer::New(result), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-      argv[0] = err;
-    }
-
-    // execute callback
-    if (!cb.IsEmpty()) {
-      TryCatch try_catch;
-      MakeCallback(obj->handle_, cb, 1, argv);
-      if (try_catch.HasCaught()) {
-        FatalException(try_catch);
-      }
-    } 
-
-    return scope.Close(args.This());
-  } else {
-
-    kc_boolean_cmn_req_t *req = (kc_boolean_cmn_req_t *)malloc(sizeof(kc_boolean_cmn_req_t));
-    req->type = KC_SYNCHRONIZE;
-    req->result = PolyDB::Error::SUCCESS;
-    req->wrapdb = obj;
-    req->flag = false;
-    req->cb.Clear();
-
-    if (args.Length() == 1) {
-      if (args[0]->IsFunction()) {
-        req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
-      } else if (args[0]->IsObject()) {
-        if (args[0]->ToObject()->Has(hard_sym)) {
-          req->flag = args[0]->ToObject()->Get(hard_sym)->BooleanValue();
-        }
-      }
-    } else {
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
       if (args[0]->ToObject()->Has(hard_sym)) {
         req->flag = args[0]->ToObject()->Get(hard_sym)->BooleanValue();
       }
-      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+      if (args[0]->ToObject()->Has(proc_sym)) {
+        req->proc = Persistent<Function>::New(Handle<Function>::Cast(args[0]->ToObject()->Get(proc_sym)));
+      }
     }
-
-    uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-    uv_req->data = req;
-
-    int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-    TRACE("uv_queue_work: ret=%d\n", ret);
-
-    obj->Ref();
-    return scope.Close(args.This());
+  } else {
+    if (args[0]->ToObject()->Has(hard_sym)) {
+      req->flag = args[0]->ToObject()->Get(hard_sym)->BooleanValue();
+    }
+    if (args[0]->ToObject()->Has(proc_sym)) {
+      req->proc = Persistent<Function>::New(Handle<Function>::Cast(args[0]->ToObject()->Get(proc_sym)));
+    }
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
+
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return scope.Close(args.This());
 }
 
 Handle<Value> PolyDBWrap::Occupy(const Arguments &args) {
@@ -2145,102 +2152,43 @@ Handle<Value> PolyDBWrap::Occupy(const Arguments &args) {
     return scope.Close(args.This());
   }
 
-  if ((args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym)) ||
-      (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym))) {
+  kc_file_processor_cmn_req_t *req = (kc_file_processor_cmn_req_t *)malloc(sizeof(kc_file_processor_cmn_req_t));
+  req->type = KC_OCCUPY;
+  req->result = PolyDB::Error::SUCCESS;
+  req->wrapdb = obj;
+  req->flag = false;
+  req->proc.Clear();
+  req->cb.Clear();
 
-    PolyDB::Error::Code result = PolyDB::Error::SUCCESS;
-    Local<Function> cb;
-    bool writable = false;
-    Local<Function> proc;
-    cb.Clear();
-    proc.Clear();
-
-    if (args.Length() == 1) {
-      if (args[0]->IsFunction()) {
-        cb = Local<Function>::New(Handle<Function>::Cast(args[0]));
-      } else if (args[0]->IsObject()) {
-        if (args[0]->ToObject()->Has(proc_sym)) {
-          proc = Local<Function>::New(Handle<Function>::Cast(args[0]->ToObject()->Get(proc_sym)));
-        }
-        if (args[0]->ToObject()->Has(writable_sym)) {
-          writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
-        }
-      }
-    } else {
-      if (args[0]->ToObject()->Has(proc_sym)) {
-        proc = Local<Function>::New(Handle<Function>::Cast(args[0]->ToObject()->Get(proc_sym)));
-      }
-      if (args[0]->ToObject()->Has(writable_sym)) {
-        writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
-      }
-      cb = Local<Function>::New(Handle<Function>::Cast(args[1]));
-    }
-    
-    // TODO: should be non-blocking implements ...
-    // execute
-    InternalFileProcessor _proc(proc);
-    if (!obj->db_->occupy(writable, &_proc)) {
-      result = obj->db_->error().code();
-    }
-
-    // init callback arguments.
-    Local<Value> argv[1] = { 
-      Local<Value>::New(Null()),
-    };
-
-    // set error to callback arguments.
-    if (result != PolyDB::Error::SUCCESS) {
-      const char *name = PolyDB::Error::codename(result);
-      Local<String> message = String::NewSymbol(name);
-      Local<Value> err = Exception::Error(message);
-      Local<Object> obj = err->ToObject();
-      obj->Set(String::NewSymbol("code"), Integer::New(result), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-      argv[0] = err;
-    }
-
-    // execute callback
-    if (!cb.IsEmpty()) {
-      TryCatch try_catch;
-      MakeCallback(obj->handle_, cb, 1, argv);
-      if (try_catch.HasCaught()) {
-        FatalException(try_catch);
-      }
-    } 
-
-    return scope.Close(args.This());
-  } else {
-
-    kc_boolean_cmn_req_t *req = (kc_boolean_cmn_req_t *)malloc(sizeof(kc_boolean_cmn_req_t));
-    req->type = KC_SYNCHRONIZE;
-    req->result = PolyDB::Error::SUCCESS;
-    req->wrapdb = obj;
-    req->flag = false;
-    req->cb.Clear();
-
-    if (args.Length() == 1) {
-      if (args[0]->IsFunction()) {
-        req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
-      } else if (args[0]->IsObject()) {
-        if (args[0]->ToObject()->Has(writable_sym)) {
-          req->flag = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
-        }
-      }
-    } else {
+  if (args.Length() == 1) {
+    if (args[0]->IsFunction()) {
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
+    } else if (args[0]->IsObject()) {
       if (args[0]->ToObject()->Has(writable_sym)) {
         req->flag = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
       }
-      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+      if (args[0]->ToObject()->Has(proc_sym)) {
+        req->proc = Persistent<Function>::New(Handle<Function>::Cast(args[0]->ToObject()->Get(proc_sym)));
+      }
     }
-
-    uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-    uv_req->data = req;
-
-    int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
-    TRACE("uv_queue_work: ret=%d\n", ret);
-
-    obj->Ref();
-    return scope.Close(args.This());
+  } else {
+    if (args[0]->ToObject()->Has(writable_sym)) {
+      req->flag = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
+    }
+    if (args[0]->ToObject()->Has(proc_sym)) {
+      req->proc = Persistent<Function>::New(Handle<Function>::Cast(args[0]->ToObject()->Get(proc_sym)));
+    }
+    req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
+
+  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_req->data = req;
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+
+  obj->Ref();
+  return scope.Close(args.This());
 }
 
 
@@ -2492,19 +2440,33 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       */
     case KC_SYNCHRONIZE:
       {
-        kc_boolean_cmn_req_t *sync_req = static_cast<kc_boolean_cmn_req_t*>(work_req->data);
-        TRACE("synchronize: hard = %d\n", sync_req->flag);
-        if (!db->synchronize(sync_req->flag, NULL)) {
-          req->result = db->error().code();
+        kc_file_processor_cmn_req_t *fproc_req = static_cast<kc_file_processor_cmn_req_t*>(work_req->data);
+        TRACE("synchronize: hard = %d\n", fproc_req->flag);
+        if (fproc_req->proc.IsEmpty()) {
+          if (!db->synchronize(fproc_req->flag, NULL)) {
+            req->result = db->error().code();
+          }
+        } else {
+          wrapdb->fproc_->proc_ = fproc_req->proc;
+          if (!db->synchronize(fproc_req->flag, wrapdb->fproc_)) {
+            req->result = db->error().code();
+          }
         }
         break;
       }
     case KC_OCCUPY:
       {
-        kc_boolean_cmn_req_t *sync_req = static_cast<kc_boolean_cmn_req_t*>(work_req->data);
-        TRACE("occupy: writable = %d\n", sync_req->flag);
-        if (!db->occupy(sync_req->flag, NULL)) {
-          req->result = db->error().code();
+        kc_file_processor_cmn_req_t *fproc_req = static_cast<kc_file_processor_cmn_req_t*>(work_req->data);
+        TRACE("occupy: writable = %d\n", fproc_req->flag);
+        if (fproc_req->proc.IsEmpty()) {
+          if (!db->occupy(fproc_req->flag, NULL)) {
+            req->result = db->error().code();
+          }
+        } else {
+          wrapdb->fproc_->proc_ = fproc_req->proc;
+          if (!db->occupy(fproc_req->flag, wrapdb->fproc_)) {
+            req->result = db->error().code();
+          }
         }
         break;
       }
@@ -2819,8 +2781,9 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_SYNCHRONIZE:
     case KC_OCCUPY:
       {
-        kc_boolean_cmn_req_t *bool_req = static_cast<kc_boolean_cmn_req_t*>(work_req->data);
-        free(bool_req);
+        kc_file_processor_cmn_req_t *fproc_req = static_cast<kc_file_processor_cmn_req_t*>(work_req->data);
+        fproc_req->proc.Dispose();
+        free(fproc_req);
         break;
       }
     default:

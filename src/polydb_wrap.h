@@ -16,6 +16,8 @@ using namespace kyotocabinet;
 
 
 class CursorWrap;
+class AsyncFileProcessor;
+
 
 class PolyDBWrap : public ObjectWrap {
   friend class CursorWrap;
@@ -25,6 +27,7 @@ class PolyDBWrap : public ObjectWrap {
 
   private:
     PolyDB *db_;
+    AsyncFileProcessor *fproc_;
 
     PolyDBWrap();
     ~PolyDBWrap();
