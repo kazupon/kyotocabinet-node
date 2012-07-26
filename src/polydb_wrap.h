@@ -16,7 +16,6 @@ using namespace kyotocabinet;
 
 
 class CursorWrap;
-class AsyncFileProcessor;
 
 
 class PolyDBWrap : public ObjectWrap {
@@ -27,7 +26,6 @@ class PolyDBWrap : public ObjectWrap {
 
   private:
     PolyDB *db_;
-    AsyncFileProcessor *fproc_;
 
     PolyDBWrap();
     ~PolyDBWrap();
@@ -71,8 +69,6 @@ class PolyDBWrap : public ObjectWrap {
 
     static void OnWork(uv_work_t *work_req);
     static void OnWorkDone(uv_work_t *work_req);
-
-    //Local<Value> MakeErrorObject(PolyDB::Error::Code result);
 };
 
 #endif /* POLYDB_WRAP_H */

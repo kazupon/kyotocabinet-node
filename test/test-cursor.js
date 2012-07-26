@@ -2161,10 +2161,12 @@ describe('Cursor class tests', function () {
             });
           });
           it('should be called', function (done) {
+            var rets = [];
             var id = setInterval(function () {
               db.get({ key: 'key33' }, function (err, value) {
                 if (err) { return done(err); }
-                if (cnt === n) {
+                var cnt = rets.pop();
+                if (cnt && cnt === n) {
                   clearInterval(id);
                   done();
                 }
@@ -2189,6 +2191,7 @@ describe('Cursor class tests', function () {
                 }, 5);
               })(cur, function () {
                 cnt.should.eql(n);
+                rets.push(cnt);
               });
             });
           });

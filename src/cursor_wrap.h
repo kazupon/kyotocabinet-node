@@ -15,7 +15,6 @@ using namespace kyotocabinet;
 
 
 class PolyDBWrap;
-class AsyncCursorVisitor;
 
 class CursorWrap : public ObjectWrap {
   public:
@@ -26,7 +25,6 @@ class CursorWrap : public ObjectWrap {
   private:
     PolyDBWrap *wrapdb_;
     PolyDB::Cursor *cursor_;
-    AsyncCursorVisitor *visitor_;
 
     CursorWrap(PolyDB::Cursor *cursor);
     ~CursorWrap();

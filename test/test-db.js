@@ -3468,7 +3468,7 @@ describe('DB class tests', function () {
     var visit_called = false;
 
     // 
-    // accept (sync)
+    // accept (async)
     //
     var accept_visitor = {
       visit_full: function (key, value) {
@@ -3933,7 +3933,7 @@ describe('DB class tests', function () {
     var visit_call_count = 0;
 
     // 
-    // accept_bulk (sync)
+    // accept_bulk (async)
     //
     describe('accept_bulk', function () {
       describe('db not open', function () {
@@ -4510,7 +4510,7 @@ describe('DB class tests', function () {
 
 
     // 
-    // iterate (sync)
+    // iterate (async)
     //
     describe('iterate', function () {
       describe('db not open', function () {

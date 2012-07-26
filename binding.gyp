@@ -26,6 +26,7 @@
         ],
         'sources': [
             './src/debug.c',
+            './src/async.cc',
             './src/error_wrap.cc',
             './src/visitor_wrap.cc',
             './src/cursor_wrap.cc',
@@ -38,7 +39,7 @@
         'include_dirs': [
             '<(kyotocabinet_shared_include_dir)'
         ], 
-        'cflags': [ '-fcxx-exceptions' ],
+        'cflags': [ '-fcxx-exceptions', '-g', '-O0' ],
         'ldflags': [],
         'conditions': [[
             'OS == "win"', {
