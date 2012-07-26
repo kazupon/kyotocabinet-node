@@ -462,87 +462,87 @@ typedef struct kc_req_t {
 } kc_req_t;
 
 // open request
-typedef struct kc_open_req_t {
-  KC_REQ_FIELD
+typedef struct kc_open_req_s {
+  KC_REQ_FIELD;
   char *path;
   uint32_t mode;
 } kc_open_req_t;
 
 // key/value params common request
-typedef struct kc_kv_req_t {
-  KC_REQ_FIELD
+typedef struct kc_kv_req_s {
+  KC_REQ_FIELD;
   char *key;
   char *value;
 } kc_kv_req_t;
 
 // increment request
-typedef struct kc_increment_req_t {
-  KC_REQ_FIELD
+typedef struct kc_increment_req_s {
+  KC_REQ_FIELD;
   char *key;
   int64_t num;
   int64_t orig;
 } kc_increment_req_t;
 
 // increment_double request
-typedef struct kc_increment_double_req_t {
-  KC_REQ_FIELD
+typedef struct kc_increment_double_req_s {
+  KC_REQ_FIELD;
   char *key;
   double num;
   double orig;
 } kc_increment_double_req_t;
 
 // cas request
-typedef struct kc_cas_req_t {
-  KC_REQ_FIELD
+typedef struct kc_cas_req_s {
+  KC_REQ_FIELD;
   char *key;
   char *oval;
   char *nval;
 } kc_cas_req_t;
 
 // return value common request
-typedef struct kc_ret_req_t {
-  KC_REQ_FIELD
+typedef struct kc_ret_req_s {
+  KC_REQ_FIELD;
   int64_t ret;
 } kc_ret_req_t;
 
 // string map value request
-typedef struct kc_strmap_ret_req_t {
-  KC_REQ_FIELD
+typedef struct kc_strmap_ret_req_s {
+  KC_REQ_FIELD;
   StringMap *ret;
 } kc_strmap_ret_req_t;
 
 // char value request
-typedef struct kc_char_ret_req_t {
-  KC_REQ_FIELD
+typedef struct kc_char_ret_req_s {
+  KC_REQ_FIELD;
   char *ret;
 } kc_char_ret_req_t;
 
 // check request
-typedef struct kc_check_req_t {
-  KC_REQ_FIELD
+typedef struct kc_check_req_s {
+  KC_REQ_FIELD;
   char *key;
   int64_t ret;
 } kc_check_req_t;
 
 // get_bulk request
-typedef struct kc_get_bulk_req_t {
-  KC_REQ_FIELD
+typedef struct kc_get_bulk_req_s {
+  KC_REQ_FIELD;
   StringVector *keys;
   bool atomic;
   StringMap *recs;
 } kc_get_bulk_req_t;
 
 // set_bulk request
-typedef struct kc_set_bulk_req_t {
-  KC_REQ_FIELD
+typedef struct kc_set_bulk_req_s {
+  KC_REQ_FIELD;
   StringMap *recs;
   bool atomic;
   int64_t num;
 } kc_set_bulk_req_t;
 
 // remove_bulk request
-typedef struct kc_remove_bulk_req_t {
-  KC_REQ_FIELD
+typedef struct kc_remove_bulk_req_s {
+  KC_REQ_FIELD;
   StringVector *keys;
   bool atomic;
   int64_t num;
@@ -555,64 +555,61 @@ typedef struct kc_remove_bulk_req_t {
   StringVector *keys;         \
 
 // match common request
-typedef struct kc_match_cmn_req_t {
-  KC_REQ_FIELD
-  KC_MATCH_REQ_FIELD
+typedef struct kc_match_cmn_req_s {
+  KC_REQ_FIELD;
+  KC_MATCH_REQ_FIELD;
 } kc_match_cmn_req_t;
 
 // match_similar request
-typedef struct kc_match_similar_req_t {
-  KC_REQ_FIELD
-  KC_MATCH_REQ_FIELD
+typedef struct kc_match_similar_req_s {
+  KC_REQ_FIELD;
+  KC_MATCH_REQ_FIELD;
   int64_t range;
   bool utf;
 } kc_match_similar_req_t;
 
 // charactor pointer type parameter common request
-typedef struct kc_char_cmn_req_t {
-  KC_REQ_FIELD
+typedef struct kc_char_cmn_req_s {
+  KC_REQ_FIELD;
   char *str;
 } kc_char_cmn_req_t;
 
 // merge request
-typedef struct kc_merge_req_t {
-  KC_REQ_FIELD
+typedef struct kc_merge_req_s {
+  KC_REQ_FIELD;
   kc::BasicDB **srcary;
   int32_t srcnum;
   uint32_t mode;
 } kc_merge_req_t;
 
 // accept request
-typedef struct kc_accept_req_t {
-  KC_REQ_FIELD
+typedef struct kc_accept_req_s {
+  KC_REQ_FIELD;
   char *key;
   Persistent<Object> visitor;
   bool writable;
 } kc_accept_req_t;
 
 // accept bulk request
-typedef struct kc_accept_bulk_req_t {
-  KC_REQ_FIELD
+typedef struct kc_accept_bulk_req_s {
+  KC_REQ_FIELD;
   StringVector *keys;
   Persistent<Object> visitor;
   bool writable;
 } kc_accept_bulk_req_t;
 
 // boolean parameter common request
-typedef struct kc_boolean_cmn_req_t {
-  KC_REQ_FIELD
+typedef struct kc_boolean_cmn_req_s {
+  KC_REQ_FIELD;
   bool flag;
 } kc_boolean_cmn_req_t;
 
 // file processor common request
-typedef struct kc_file_processor_cmn_req_t {
-  KC_REQ_FIELD
+typedef struct kc_file_processor_cmn_req_s {
+  KC_REQ_FIELD;
   bool flag;
   Persistent<Object> proc;
 } kc_file_processor_cmn_req_t;
-
-
-static pthread_mutex_t db_fproc_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 
 StringVector* Array2Vector(const Local<Value> obj) {

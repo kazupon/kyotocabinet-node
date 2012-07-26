@@ -57,21 +57,21 @@ enum kc_cur_req_type {
   Persistent<Function> cb;      \
 
 // cursor base request
-typedef struct kc_cur_req_t {
-  KC_CUR_REQ_FIELD
-} kc_cur_req_type_t;
+typedef struct kc_cur_req_s {
+  KC_CUR_REQ_FIELD;
+} kc_cur_req_t;
 
 // cursor create request
-typedef struct kc_cur_create_req_t {
-  KC_CUR_REQ_FIELD
+typedef struct kc_cur_create_req_s {
+  KC_CUR_REQ_FIELD;
   PolyDBWrap *wrapdb;
   CursorWrap *retcur;
   Persistent<Object> self;
 } kc_cur_create_req_t;
 
 // cursor common request
-typedef struct kc_cur_cmn_req_t {
-  KC_CUR_REQ_FIELD
+typedef struct kc_cur_cmn_req_s {
+  KC_CUR_REQ_FIELD;
   char *key;
   char *value;
   bool step;
@@ -565,7 +565,7 @@ Handle<Value> CursorWrap::Accept(const Arguments &args) {
 void CursorWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
 
-  kc_cur_req_type_t *req = static_cast<kc_cur_req_type_t*>(work_req->data);
+  kc_cur_req_t *req = static_cast<kc_cur_req_t*>(work_req->data);
   assert(req != NULL);
 
   // do operation
@@ -729,7 +729,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
   HandleScope scope;
   TRACE("argument: work_req=%p\n", work_req);
 
-  kc_cur_req_type_t *req = static_cast<kc_cur_req_type_t*>(work_req->data);
+  kc_cur_req_t *req = static_cast<kc_cur_req_t*>(work_req->data);
   assert(req != NULL);
 
   // init callback arguments.
