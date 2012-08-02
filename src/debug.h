@@ -6,7 +6,7 @@
 #ifndef DEBUG_H
 #define DEBUG_H
 
-#if defined(DEBUG) && DEBUG // TODO: ???
+#if defined(NDEBUG) && NDEBUG
 #define TRACE(fmt, ...)     ((void)0)
 #else
 #define TRACE(fmt, ...)     do { fprintf(stderr, "%s: %d: (%p) %s: " fmt, __FILE__, __LINE__, pthread_self(), __func__, ##__VA_ARGS__); } while (0)
