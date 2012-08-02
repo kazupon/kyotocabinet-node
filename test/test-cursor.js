@@ -2171,7 +2171,7 @@ describe('Cursor class tests', function () {
                   done();
                 }
               });
-            }, 5);
+            }, 1);
             var cnt = 0;
             cur.jump(function (err) {
               if (err) { return done(err); }

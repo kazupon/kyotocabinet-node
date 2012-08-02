@@ -7,6 +7,7 @@
 
 #include "async.h"
 #include "debug.h"
+#include "utils.h"
 #include <assert.h>
 
 using namespace v8;
@@ -22,7 +23,6 @@ enum kc_async_kind_t {
 
 #define KC_ASYNC_REQ_FIELD    \
   Persistent<Object> cb;      \
-  AtomicInt64 flag;           \
   AtomicInt64 done;           \
   kc_async_kind_t type;       \
 
@@ -58,7 +58,7 @@ static pthread_mutex_t async_mtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t async_cond = PTHREAD_COND_INITIALIZER;
 static bool async_init = false;
 static uv_async_t async_req_notifier;
-static uv_idle_t async_req_done_notifier;
+static struct timespec ts;
 
 
 AsyncVisitor::AsyncVisitor(Persistent<Object> &cb, bool writable)
@@ -74,9 +74,11 @@ const char* AsyncVisitor::visit_full(const char *kbuf, size_t ksiz,
                                      const char *vbuf, size_t vsiz, size_t *sp) {
   TRACE("arguments: kbuf = %s, ksiz = %ld, vbuf = %s, vsiz = %ld, sp = %ld(%p)\n", kbuf, ksiz, vbuf, vsiz, *sp, sp);
 
+  TRACE("lock ...\n");
+  pthread_mutex_lock(&async_mtx);
+
   kc_async_visitor_req_t *req = (kc_async_visitor_req_t *)malloc(sizeof(kc_async_visitor_req_t));
   req->cb = cb_;
-  req->flag.set(0);
   req->done.set(0);
   req->type = KC_ASYNC_VISIT_FULL;
   req->writable = writable_;
@@ -89,23 +91,16 @@ const char* AsyncVisitor::visit_full(const char *kbuf, size_t ksiz,
 
   TRACE("before: rv = %s(%p), sp = %ld\n", req->rv, req->rv, req->sp);
 
-  TRACE("lock ...\n");
-  pthread_mutex_lock(&async_mtx);
-
   async_req_notifier.data = req;
   int ret = uv_async_send(&async_req_notifier);
   TRACE("uv_async_send: ret = %d\n", ret);
 
   TRACE("callback wating ... \n");
-  if (req->done.get() == 0) {
-    req->flag.set(1);
-    int ret = pthread_cond_wait(&async_cond, &async_mtx);
-    TRACE("cond wait result: ret = %d\n", ret);
-  }
+  do {
+    int32_t code = pthread_cond_timedwait(&async_cond, &async_mtx, &ts);
+    assert(code == 0 || code == ETIMEDOUT || code == EINTR);
+  } while (req->done.get() == 0);
   TRACE("... callback done\n");
-
-  pthread_mutex_unlock(&async_mtx);
-  TRACE("... unlock\n");
 
   TRACE("after: rv = %p, sp = %ld\n", req->rv, req->sp);
   const char *rv = reinterpret_cast<const char*>(req->rv);
@@ -114,6 +109,10 @@ const char* AsyncVisitor::visit_full(const char *kbuf, size_t ksiz,
   }
 
   free(req);
+  req = NULL;
+
+  pthread_mutex_unlock(&async_mtx);
+  TRACE("... unlock\n");
 
   return rv;
 }
@@ -121,9 +120,11 @@ const char* AsyncVisitor::visit_full(const char *kbuf, size_t ksiz,
 const char* AsyncVisitor::visit_empty(const char *kbuf, size_t ksiz, size_t *sp) {
   TRACE("arguments: kbuf = %s, ksiz = %ld, sp = %ld\n", kbuf, ksiz, *sp);
 
+  TRACE("lock ...\n");
+  pthread_mutex_lock(&async_mtx);
+
   kc_async_visitor_req_t *req = (kc_async_visitor_req_t *)malloc(sizeof(kc_async_visitor_req_t));
   req->cb = cb_;
-  req->flag.set(0);
   req->done.set(0);
   req->type = KC_ASYNC_VISIT_EMPTY;
   req->writable = writable_;
@@ -134,23 +135,17 @@ const char* AsyncVisitor::visit_empty(const char *kbuf, size_t ksiz, size_t *sp)
 
   TRACE("before: rv = %s(%p), sp = %ld\n", req->rv, req->rv, req->sp);
 
-  TRACE("lock ...\n");
-  pthread_mutex_lock(&async_mtx);
-
   async_req_notifier.data = req;
-  int ret = uv_async_send(&async_req_notifier);
+  int32_t ret = uv_async_send(&async_req_notifier);
   TRACE("uv_async_send: ret = %d\n", ret);
 
   TRACE("callback wating ... \n");
-  if (req->done.get() == 0) {
-    req->flag.set(1);
-    int ret = pthread_cond_wait(&async_cond, &async_mtx);
-    TRACE("cond wait result: ret = %d\n", ret);
-  }
+  do {
+    int32_t code = pthread_cond_timedwait(&async_cond, &async_mtx, &ts);
+    assert(code == 0 || code == ETIMEDOUT || code == EINTR);
+    TRACE("pthread_cond_timedwait: %d\n", code);
+  } while (req->done.get() == 0);
   TRACE("... callback done\n");
-
-  pthread_mutex_unlock(&async_mtx);
-  TRACE("... unlock\n");
 
   TRACE("after: rv = %p, sp = %ld\n", req->rv, req->sp);
   const char *rv = reinterpret_cast<const char *>(req->rv);
@@ -159,6 +154,10 @@ const char* AsyncVisitor::visit_empty(const char *kbuf, size_t ksiz, size_t *sp)
   }
 
   free(req);
+  req = NULL;
+
+  pthread_mutex_unlock(&async_mtx);
+  TRACE("... unlock\n");
 
   return rv;
 }
@@ -183,9 +182,11 @@ AsyncFileProcessor::~AsyncFileProcessor() {
 bool AsyncFileProcessor::process(const std::string &path, int64_t count, int64_t size) {
   TRACE("arguments: path = %s, count = %lld, size = %lld\n", path.c_str(), count, size);
 
+  TRACE("lock ...\n");
+  pthread_mutex_lock(&async_mtx);
+
   kc_async_file_proc_req_t *req = (kc_async_file_proc_req_t *)malloc(sizeof(kc_async_file_proc_req_t));
   req->cb = cb_;
-  req->flag.set(0);
   req->done.set(0);
   req->type = KC_ASYNC_FILE_PROCESS;
   req->count = count;
@@ -195,56 +196,42 @@ bool AsyncFileProcessor::process(const std::string &path, int64_t count, int64_t
 
   TRACE("before: rv = %d\n", req->rv);
 
-  TRACE("lock ...\n");
-  pthread_mutex_lock(&async_mtx);
-
   async_req_notifier.data = req;
-  int ret = uv_async_send(&async_req_notifier);
+  int32_t ret = uv_async_send(&async_req_notifier);
   TRACE("uv_async_send: ret = %d\n", ret);
 
   TRACE("callback wating ... \n");
-  if (req->done.get() == 0) {
-    req->flag.set(1);
-    int ret = pthread_cond_wait(&async_cond, &async_mtx);
-    TRACE("cond wait result: ret = %d\n", ret);
-  }
+  do {
+    int32_t code = pthread_cond_timedwait(&async_cond, &async_mtx, &ts);
+    assert(code == 0 || code == ETIMEDOUT || code == EINTR);
+  } while (req->done.get() == 0);
   TRACE("... callback done\n");
-
-  pthread_mutex_unlock(&async_mtx);
-  TRACE("... unlock\n");
 
   TRACE("after: rv = %d\n", req->rv);
   bool rv = req->rv;
 
   free(req);
+  req = NULL;
+
+  pthread_mutex_unlock(&async_mtx);
+  TRACE("... unlock\n");
 
   return rv;
 }
 
-
-static void kc_async_req_done_notifier_cb(uv_idle_t *notifier, int status) {
-  TRACE("notifier = %p, status = %d\n", notifier, status);
-
-  kc_async_base_req_t *req = reinterpret_cast<kc_async_base_req_t*>(notifier->data);
-  assert(req != NULL);
-
-  if (req->flag.get() == 1) {
-    int ret = pthread_cond_signal(&async_cond);
-    TRACE("cond siglal: ret = %d\n", ret);
-    req->done.set(1);
-    uv_idle_stop(notifier);
-  }
-}
 
 static void kc_async_req_notifier_cb(uv_async_t *notifier, int status) {
   HandleScope scope;
   TRACE("notifier = %p, status = %d\n", notifier, status);
   assert(notifier->data != NULL);
 
-  switch (((kc_async_base_req_t *)notifier->data)->type) {
+  kc_async_base_req_t *base_req = reinterpret_cast<kc_async_base_req_t*>(notifier->data);
+  assert(base_req != NULL);
+
+  switch (base_req->type) {
     case KC_ASYNC_VISIT_FULL:
       {
-        kc_async_visitor_req_t *req = static_cast<kc_async_visitor_req_t*>(notifier->data);
+        kc_async_visitor_req_t *req = reinterpret_cast<kc_async_visitor_req_t*>(notifier->data);
         assert(req != NULL);
         TRACE("req(%p): key = %s, key_size = %ld, value = %s, value_size = %ld\n", 
             req, req->key, req->key_size, req->value, req->value_size);
@@ -373,8 +360,9 @@ static void kc_async_req_notifier_cb(uv_async_t *notifier, int status) {
       break;
   }
 
-  async_req_done_notifier.data = notifier->data;
-  uv_idle_start(&async_req_done_notifier, kc_async_req_done_notifier_cb);
+  int32_t code = pthread_cond_signal(&async_cond);
+  TRACE("cond siglal: code = %d\n", code);
+  base_req->done.set(1);
 }
 
 
@@ -386,7 +374,7 @@ void kc_async_init(uv_loop_t *loop) {
   }
   async_init = true;
   
-  uv_idle_init(loop, &async_req_done_notifier);
+  doublesec2timespec(0.0001, &ts);
   uv_async_init(loop, &async_req_notifier, kc_async_req_notifier_cb);
   uv_unref((uv_handle_t *)&async_req_notifier);
 }
