@@ -26,13 +26,13 @@ kyotocabinet bindings for Node.js
 
 # Running Tests
 
-kyotocabient-node depends on [Vows](http://vowsjs.org/) for testing.
+kyotocabient-node depends on [mocha](http://visionmedia.github.com/mocha/) for testing.
 
-    $ vows test/*.js
+    $ mocha test/*.js
 
 
 # License
 
 [MIT license](http://www.opensource.org/licenses/mit-license.php).
 
-See the `README.md`.
+See the `LICENSE`.

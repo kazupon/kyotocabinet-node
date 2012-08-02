@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ====
 
 This license applies to all parts of Node that are not externally
-maintained libraries. The externally maintained libraries used by libuv-lua are:
+maintained libraries. The externally maintained libraries used by kyotocabinet-node are:
 
 - kyotocabinet, located at deps/kyotocabinet. kyotocabinet license follows:
   """
