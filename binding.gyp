@@ -26,10 +26,12 @@
         ],
         'sources': [
             './src/debug.c',
+            './src/utils.cc',
             './src/async.cc',
             './src/error_wrap.cc',
             './src/visitor_wrap.cc',
             './src/cursor_wrap.cc',
+            './src/mapreduce_wrap.cc',
             './src/polydb_wrap.cc',
             './src/kyotocabinet.cc'
         ],
@@ -50,7 +52,8 @@
         ], [
             'OS=="mac"', {
                 'xcode_settings': {
-                    'GCC_ENABLE_CPP_EXCEPTIONS': 'YES'
+                    'GCC_ENABLE_CPP_EXCEPTIONS': 'YES',
+                    'GCC_ENABLE_CPP_RTTI': 'YES'
                 }
             }
         ]]

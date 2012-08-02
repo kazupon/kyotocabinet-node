@@ -1887,7 +1887,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.check({ key: 1 });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -1998,7 +1998,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.get_bulk({ keys: 1 });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -2008,7 +2008,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.get_bulk({ keys: [ 'key1' ], atomic: 'hello' });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -2153,7 +2153,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.set_bulk({ recs: 1 });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -2163,7 +2163,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.set_bulk({ recs: { key1: 'key1' }, atomic: 'hello' });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -2262,7 +2262,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.remove_bulk({ keys: 1 });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -2272,7 +2272,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.remove_bulk({ keys: [ 'key1' ], atomic: 'hello' });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -2407,7 +2407,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.match_prefix({ prefix: 1 });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -2417,7 +2417,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.match_prefix({ prefix: 'key', max: 'hello' });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -2568,7 +2568,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.match_regex({ regex: 1 });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -2578,7 +2578,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.match_regex({ regex: 'key', max: 'hello' });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -2736,7 +2736,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.match_similar({ origin: 1 });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -2746,7 +2746,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.match_similar({ origin: 'key', max: 'hello' });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -2756,7 +2756,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.match_similar({ origin: 'key', range: 'hello' });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -2766,7 +2766,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.match_similar({ origin: 'key', utf: 'hello' });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -2915,7 +2915,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.copy(123);
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -3059,7 +3059,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.merge({ srcary: 1 });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -3069,7 +3069,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.merge({ srcary: dbs, mode: 'hello' });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -3245,7 +3245,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.dump_snapshot(1);
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -3401,7 +3401,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 mdb.load_snapshot(1);
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -3552,7 +3552,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 adb.accept({ key: 1, visitor: accept_visitor, writable: true });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -3562,7 +3562,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 adb.accept({ key: 'hoge', visitor: 1, writable: false });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -3572,7 +3572,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 adb.accept({ key: 'hoge', visitor: accept_visitor, writable: 1 });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -4009,7 +4009,7 @@ describe('DB class tests', function () {
                   visitor: function (key, value) { return Visitor.NOP; },
                   writable: true
                 });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -4019,7 +4019,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 adb.accept_bulk({ keys: [ 'hoge' ], visitor: 1, writable: false });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -4033,7 +4033,7 @@ describe('DB class tests', function () {
                   visitor: function (key, value) { return Visitor.NOP; },
                   writable: 1
                 });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -4583,7 +4583,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 adb.iterate({ visitor: 1, writable: false });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -4596,7 +4596,7 @@ describe('DB class tests', function () {
                   visitor: function (key, value) { return Visitor.NOP; },
                   writable: 1
                 });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -5063,7 +5063,7 @@ describe('DB class tests', function () {
               it('should occured `TypeError` exception', function (done) {
                 try {
                   adb.begin_transaction(1);
-                } catch(e) {
+                } catch (e) {
                   e.should.be.an.instanceOf(TypeError);
                   done();
                 }
@@ -5075,7 +5075,7 @@ describe('DB class tests', function () {
               it('should occured `TypeError` exception', function (done) {
                 try {
                   adb.end_transaction(1);
-                } catch(e) {
+                } catch (e) {
                   e.should.be.an.instanceOf(TypeError);
                   done();
                 }
@@ -5277,7 +5277,7 @@ describe('DB class tests', function () {
               it('should occured `TypeError` exception', function (done) {
                 try {
                   adb.begin_transaction(1);
-                } catch(e) {
+                } catch (e) {
                   e.should.be.an.instanceOf(TypeError);
                   done();
                 }
@@ -5287,7 +5287,7 @@ describe('DB class tests', function () {
               it('should occured `TypeError` exception', function (done) {
                 try {
                   adb.begin_transaction();
-                } catch(e) {
+                } catch (e) {
                   e.should.be.an.instanceOf(TypeError);
                   done();
                 }
@@ -5475,7 +5475,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 adb.synchronize({ proc: 1, hard: true });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -5488,7 +5488,7 @@ describe('DB class tests', function () {
                   proc: function () {},
                   hard: 1
                 });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -5633,7 +5633,7 @@ describe('DB class tests', function () {
             it('should occured `TypeError` exception', function (done) {
               try {
                 adb.occupy({ proc: 1, writable: true });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -5646,7 +5646,7 @@ describe('DB class tests', function () {
                   proc: function () {},
                   writable: 1
                 });
-              } catch(e) {
+              } catch (e) {
                 e.should.be.an.instanceOf(TypeError);
                 done();
               }
@@ -5776,6 +5776,679 @@ describe('DB class tests', function () {
         });
       });
     });
+
+    
+    // 
+    // mapreduce (async)
+    //
+    describe('mapreduce', function () {
+      describe('db not open', function () {
+        it('should be `INVALID` error', function (done) {
+          new DB().mapreduce({
+            map: function (key, value, emit) {},
+            reduce: function (key, iter) {},
+            tmppath: './',
+            opts: DB.XNOLOCK,
+            dbnum: 5,
+            clim: 500,
+            cbnum: 1000000,
+            log: function (name, msg) {},
+            pre: function () {},
+            mid: function () {},
+            post: function () {},
+          }, function (err) {
+            err.should.have.property('code');
+            err.code.should.eql(Error.INVALID);
+            done();
+          });
+        });
+      });
+      describe('db open', function () {
+        var adb;
+        var N = 10000;
+        var num = 0;
+        var fname = 'mapreduce.kct';
+        before(function (done) {
+          adb = new DB();
+          adb.open({ path: fname, mode: DB.OWRITER + DB.OCREATE }, function (err) {
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        beforeEach(function (done) {
+          var recs = {};
+          for (var i = 0; i < N; i++) {
+            recs['key' + (i + 1)] = 'value' + (i + 1);
+          }
+          adb.set_bulk({
+            recs: recs
+          }, function (err, cnt) {
+            num = cnt;
+            if (err) { return done(err); }
+            done();
+          });
+        });
+        after(function (done) {
+          adb.close(function (err) {
+            if (err) { return done(err); }
+            fs.unlink(fname, function (err) {
+              done();
+            });
+          });
+        });
+        describe('functional', function () {
+          it('shoule be call `map`, `reduce`, `log`, `pre`, `mid`, `post` callback functions', function (done) {
+            var map_cnt = 0;
+            var reduce_cnt = 0;
+            var reduce_iter_cnt = 0;
+            var log_cnt = 0;
+            var pre_cnt = 0;
+            var mid_cnt = 0;
+            var post_cnt = 0;
+            adb.mapreduce({
+              map: function (key, value, emit) {
+                key.should.be.a.ok;
+                value.should.be.a.ok;
+                emit.should.be.a.ok;
+                map_cnt++;
+                var ret = emit(key, value);
+                ret.should.be.a.ok;
+                return true;
+              },
+              reduce: function (key, iter) {
+                key.should.be.a.ok;
+                iter.should.be.a.ok;
+                reduce_cnt++;
+                while (true) {
+                  var value = iter();
+                  if (!value) {
+                    break;
+                  }
+                  reduce_iter_cnt++;
+                }
+                return true;
+              },
+              log: function (name, msg) {
+                name.should.be.a.ok;
+                msg.should.be.a.ok;
+                log_cnt++;
+                return true;
+              },
+              pre: function () {
+                pre_cnt++;
+                return true;
+              },
+              mid: function () {
+                mid_cnt++;
+                return true;
+              },
+              post: function () {
+                post_cnt++;
+                return true;
+              }
+            }, function (err) {
+              map_cnt.should.eql(num);
+              reduce_cnt.should.eql(num);
+              reduce_iter_cnt.should.eql(num);
+              log_cnt.should.above(0);
+              pre_cnt.should.eql(1);
+              mid_cnt.should.eql(1);
+              post_cnt.should.eql(1);
+              done();
+            });
+          });
+        });
+        describe('parameter check', function () {
+          var map = function (key, value, emit) {
+            emit(key, value);
+            return true;
+          };
+          var reduce = function (key, iter) {
+            while (true) {
+              var value = iter();
+              if (!value) {
+                break;
+              }
+            }
+            return true;
+          };
+          var log = function (name, msg) {
+            return true;
+          };
+          var pre = function () { return true; };
+          var mid = function () { return true; };
+          var post = function () { return true; };
+          describe('no specific', function () {
+            it('should occured `TypeError` exception', function (done) {
+              try {
+                adb.mapreduce();
+              } catch (e) {
+                e.should.be.an.instanceOf(TypeError);
+                done();
+              }
+            });
+          });
+          describe('argument1 is not object type', function () {
+            it('should occured `TypeError` exception', function (done) {
+              try {
+                adb.mapreduce();
+              } catch (e) {
+                e.should.be.an.instanceOf(TypeError);
+                done();
+              }
+            });
+          });
+          describe('map', function () {
+            describe('no specific', function () {
+              it('should occured `TypeError` exception', function (done) {
+                try {
+                  adb.mapreduce({
+                    reduce: reduce
+                  }, function (err) {
+                    if (err) { return done(err); }
+                  });
+                } catch (e) {
+                  e.should.be.an.instanceOf(TypeError);
+                  done();
+                }
+              });
+            });
+            describe('not function specific', function () {
+              it('should occured `TypeError` exception', function (done) {
+                try {
+                  adb.mapreduce({
+                    map: 1,
+                    reduce: reduce
+                  }, function (err) {
+                    if (err) { return done(err); }
+                  });
+                } catch (e) {
+                  e.should.be.an.instanceOf(TypeError);
+                  done();
+                }
+              });
+            });
+          });
+          describe('reduce', function () {
+            describe('no specific', function () {
+              it('should occured `TypeError` exception', function (done) {
+                try {
+                  adb.mapreduce({
+                    map : map
+                  }, function (err) {
+                    if (err) { return done(err); }
+                  });
+                } catch (e) {
+                  e.should.be.an.instanceOf(TypeError);
+                  done();
+                }
+              });
+            });
+            describe('not function type', function () {
+              it('should occured `TypeError` exception', function (done) {
+                try {
+                  adb.mapreduce({
+                    map : map,
+                    reduce: 1
+                  }, function (err) {
+                    if (err) { return done(err); }
+                  });
+                } catch (e) {
+                  e.should.be.an.instanceOf(TypeError);
+                  done();
+                }
+              });
+            });
+          });
+          describe('tmppath', function () {
+            describe('no specific', function () {
+              it('should be `success`', function (done) {
+                adb.mapreduce({
+                  map : map,
+                  reduce: reduce
+                }, function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+            });
+            describe('not exist path', function () {
+              it('should be `NOREPOS` error', function (done) {
+                adb.mapreduce({
+                  map : map,
+                  reduce: reduce,
+                  tmppath: '/hogehgoe'
+                }, function (err) {
+                  err.should.have.property('code');
+                  err.code.should.eql(Error.NOREPOS);
+                  done();
+                });
+              });
+            });
+            describe('no permission path', function () {
+              it('should be `NOPERM` error', function (done) {
+                adb.mapreduce({
+                  map : map,
+                  reduce: reduce,
+                  tmppath: '/'
+                }, function (err) {
+                  err.should.have.property('code');
+                  err.code.should.eql(Error.NOPERM);
+                  done();
+                });
+              });
+            });
+            describe('exist path', function (done) {
+              var path = './tmp';
+              before(function (done) {
+                fs.mkdir(path, function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+              after(function (done) {
+                fs.rmdir(path, function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+              it('should be `success`', function (done) {
+                adb.mapreduce({
+                  map : map,
+                  reduce: reduce,
+                  tmppath: path
+                }, function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+            });
+          });
+          describe('opts', function () {
+            var map_cnt;
+            var reduce_cnt;
+            beforeEach(function (done) {
+              map_cnt = 0;
+              reduce_cnt = 0;
+              done();
+            });
+            var mapreduce_proc = function (done, opts) {
+              adb.mapreduce({
+                map : function (key, value, emit) {
+                  map_cnt++;
+                  emit(key, value);
+                  return true;
+                },
+                reduce: function (key, iter) {
+                  reduce_cnt++;
+                  while (true) {
+                    var value = iter();
+                    if (!value) {
+                      break;
+                    }
+                  }
+                  return true;
+                },
+                opts: opts
+              }, function (err) {
+                if (err) { return done(err); }
+                map_cnt.should.eql(num);
+                reduce_cnt.should.eql(num);
+                done();
+              });
+            };
+            describe('no specific', function () {
+              it('should be `success`', function (done) {
+                adb.mapreduce({
+                  map : map,
+                  reduce: reduce
+                }, function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+            });
+            describe('XNOLOCK', function () {
+              it('should be `success`', function (done) {
+                mapreduce_proc(done, DB.XNOLOCK);
+              });
+            });
+            describe('XPARAMAP', function () {
+              it('should be `success`', function (done) {
+                mapreduce_proc(done, DB.XPARAMAP);
+              });
+            });
+            describe('XPARARED', function () {
+              it('should be `success`', function (done) {
+                mapreduce_proc(done, DB.XPARARED);
+              });
+            });
+            describe('XPARAFLS', function () {
+              it('should be `success`', function (done) {
+                mapreduce_proc(done, DB.XPARAFLS);
+              });
+            });
+            describe('XNOCOMP', function () {
+              it('should be `success`', function (done) {
+                adb.mapreduce({
+                  map : function (key, value, emit) {
+                    map_cnt++;
+                    return emit(key, value);
+                  },
+                  reduce: function (key, iter) {
+                    reduce_cnt++;
+                    while (true) {
+                      var value = iter();
+                      if (!value) {
+                        break;
+                      }
+                    }
+                    return true;
+                  },
+                  tmppath: './',
+                  dbnum: 3,
+                  opts: DB.XNOCOMP
+                }, function (err) {
+                  if (err) { return done(err); }
+                  map_cnt.should.eql(num);
+                  reduce_cnt.should.eql(num);
+                  done();
+                });
+              });
+            });
+            describe('XPARAMAP | XPARARED', function () {
+              it('should be `success`', function (done) {
+                mapreduce_proc(done, DB.XPARAMAP | DB.XPARARED);
+              });
+            });
+            describe('XNOLOCK | XPARAMAP', function () {
+              it('should be `success`', function (done) {
+                mapreduce_proc(done, DB.XNOLOCK | DB.XPARAMAP);
+              });
+            });
+            describe('XNOLOCK | XPARAMAP | XPARARED', function () {
+              it('should be `success`', function (done) {
+                mapreduce_proc(done, DB.XNOLOCK | DB.XPARAMAP);
+              });
+            });
+            describe('XNOLOCK | XPARAMAP | XPARARED | XPARAFLS | XNOCOMP', function () {
+              it('should be `success`', function (done) {
+                adb.mapreduce({
+                  map : function (key, value, emit) {
+                    map_cnt++;
+                    return emit(key, value);
+                  },
+                  reduce: function (key, iter) {
+                    reduce_cnt++;
+                    while (true) {
+                      var value = iter();
+                      if (!value) {
+                        break;
+                      }
+                    }
+                    return true;
+                  },
+                  tmppath: './',
+                  dbnum: 3,
+                  opts: DB.XNOLOCK | DB.XPARAMAP | DB.XPARARED | DB.XPARAFLS | DB.XNOCOMP
+                }, function (err) {
+                  if (err) { return done(err); }
+                  map_cnt.should.eql(num);
+                  reduce_cnt.should.eql(num);
+                  done();
+                });
+              });
+            });
+          });
+          describe('dbnum', function () {
+            describe('no specific', function () {
+              it('should be `success`', function (done) {
+                adb.mapreduce({
+                  map : map,
+                  reduce: reduce,
+                  clim: 1,
+                  cbnum: 1
+                }, function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+            });
+            describe('not number', function () {
+              it('should occured `TypeError` exception', function (done) {
+                try {
+                  adb.mapreduce({
+                    map : map,
+                    reduce: reduce,
+                    dbnum: '1',
+                    clim: 1,
+                    cbnum: 1
+                  }, function (err) {
+                  });
+                } catch (e) {
+                  e.should.be.an.instanceOf(TypeError);
+                  done();
+                }
+              });
+            });
+            describe('min', function () {
+            });
+            describe('mix', function () {
+            });
+          });
+          describe('clim', function () {
+            describe('no specific', function () {
+              it('should be `success`', function (done) {
+                adb.mapreduce({
+                  map : map,
+                  reduce: reduce,
+                  dbnum: 1,
+                  cbnum: 1
+                }, function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+            });
+            describe('not number type', function () {
+              it('should occured `TypeError` exception', function (done) {
+                try {
+                  adb.mapreduce({
+                    map : map,
+                    reduce: reduce,
+                    dbnum: 1,
+                    clim: '1',
+                    cbnum: 1
+                  }, function (err) {
+                  });
+                } catch (e) {
+                  e.should.be.an.instanceOf(TypeError);
+                  done();
+                }
+              });
+            });
+            describe('min', function () {
+            });
+            describe('mix', function () {
+            });
+          });
+          describe('cbum', function () {
+            describe('no specific', function () {
+              it('should be `success`', function (done) {
+                adb.mapreduce({
+                  map : map,
+                  reduce: reduce,
+                  dbnum: 1,
+                  clim: 1
+                }, function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+            });
+            describe('not number type', function () {
+              it('should occured `TypeError` exception', function (done) {
+                try {
+                  adb.mapreduce({
+                    map : map,
+                    reduce: reduce,
+                    dbnum: 1,
+                    clim: 1,
+                    cbnum: '1'
+                  }, function (err) {
+                  });
+                } catch (e) {
+                  e.should.be.an.instanceOf(TypeError);
+                  done();
+                }
+              });
+            });
+            describe('min', function () {
+            });
+            describe('mix', function () {
+            });
+          });
+          describe('log', function () {
+            describe('no specific', function () {
+              it('should be `success`', function (done) {
+                adb.mapreduce({
+                  map : map,
+                  reduce: reduce,
+                  pre: pre,
+                  mid: mid,
+                  post: post,
+                }, function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+            });
+            describe('not function type', function () {
+              it('should occured `TypeError` exception', function (done) {
+                try {
+                  adb.mapreduce({
+                    map : map,
+                    reduce: reduce,
+                    log: 1,
+                    pre: pre,
+                    mid: mid,
+                    post: post,
+                  }, function (err) {
+                  });
+                } catch (e) {
+                  e.should.be.an.instanceOf(TypeError);
+                  done();
+                }
+              });
+            });
+          });
+          describe('pre', function () {
+            describe('no specific', function () {
+              it('should be `success`', function (done) {
+                adb.mapreduce({
+                  map : map,
+                  reduce: reduce,
+                  log: log,
+                  mid: mid,
+                  post: post
+                }, function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+            });
+            describe('not function type', function () {
+              it('should occured `TypeError` exception', function (done) {
+                try {
+                  adb.mapreduce({
+                    map : map,
+                    reduce: reduce,
+                    log: log,
+                    pre: 1,
+                    mid: mid,
+                    post: post
+                  }, function (err) {
+                  });
+                } catch (e) {
+                  e.should.be.an.instanceOf(TypeError);
+                  done();
+                }
+              });
+            });
+          });
+          describe('mid', function () {
+            describe('no specific', function () {
+              it('should be `success`', function (done) {
+                adb.mapreduce({
+                  map : map,
+                  reduce: reduce,
+                  log: log,
+                  pre: pre,
+                  post: post
+                }, function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+            });
+            describe('not function type', function () {
+              it('should occured `TypeError` exception', function (done) {
+                try {
+                  adb.mapreduce({
+                    map : map,
+                    reduce: reduce,
+                    log: log,
+                    pre: pre,
+                    mid: 1,
+                    post: post
+                  }, function (err) {
+                  });
+                } catch (e) {
+                  e.should.be.an.instanceOf(TypeError);
+                  done();
+                }
+              });
+            });
+          });
+          describe('post', function () {
+            describe('no specific', function () {
+              it('should be `success`', function (done) {
+                adb.mapreduce({
+                  map : map,
+                  reduce: reduce,
+                  log: log,
+                  pre: pre,
+                  mid: mid
+                }, function (err) {
+                  if (err) { return done(err); }
+                  done();
+                });
+              });
+            });
+            describe('not function type', function () {
+              it('should occured `TypeError` exception', function (done) {
+                try {
+                  adb.mapreduce({
+                    map : map,
+                    reduce: reduce,
+                    log: log,
+                    pre: pre,
+                    mid: mid,
+                    post: 1
+                  }, function (err) {
+                  });
+                } catch (e) {
+                  e.should.be.an.instanceOf(TypeError);
+                  done();
+                }
+              });
+            });
+          });
+
+        });
+      });
+    });
+
 
 
   });

@@ -56,14 +56,13 @@ typedef struct kc_async_file_proc_req_s {
 
 static pthread_mutex_t async_mtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t async_cond = PTHREAD_COND_INITIALIZER;
-static uv_once_t kc__async_init_once_guard = UV_ONCE_INIT;
 static bool async_init = false;
 static uv_async_t async_req_notifier;
 static uv_idle_t async_req_done_notifier;
 
 
 AsyncVisitor::AsyncVisitor(Persistent<Object> &cb, bool writable)
-  : writable_(writable), cb_(cb) {
+  : cb_(cb), writable_(writable) {
   TRACE("fields: writable_ = %d, cb_ = %p\n", writable_, &cb_);
 }
 
@@ -73,7 +72,7 @@ AsyncVisitor::~AsyncVisitor() {
 
 const char* AsyncVisitor::visit_full(const char *kbuf, size_t ksiz,
                                      const char *vbuf, size_t vsiz, size_t *sp) {
-  TRACE("arguments: kbuf = %s, ksiz = %d, vbuf = %s, vsiz = %d, sp = %d(%p)\n", kbuf, ksiz, vbuf, vsiz, *sp, sp);
+  TRACE("arguments: kbuf = %s, ksiz = %ld, vbuf = %s, vsiz = %ld, sp = %ld(%p)\n", kbuf, ksiz, vbuf, vsiz, *sp, sp);
 
   kc_async_visitor_req_t *req = (kc_async_visitor_req_t *)malloc(sizeof(kc_async_visitor_req_t));
   req->cb = cb_;
@@ -81,14 +80,14 @@ const char* AsyncVisitor::visit_full(const char *kbuf, size_t ksiz,
   req->done.set(0);
   req->type = KC_ASYNC_VISIT_FULL;
   req->writable = writable_;
-  req->key = (char *)kbuf;
+  req->key = const_cast<char*>(kbuf);
   req->key_size = ksiz;
-  req->value = (char *)vbuf;
+  req->value = const_cast<char*>(vbuf);
   req->value_size = vsiz;
-  req->rv = (char *)NOP;
+  req->rv = const_cast<char*>(NOP);
   req->sp = *sp;
 
-  TRACE("before: rv = %s(%p), sp = %d\n", req->rv, req->rv, req->sp);
+  TRACE("before: rv = %s(%p), sp = %ld\n", req->rv, req->rv, req->sp);
 
   TRACE("lock ...\n");
   pthread_mutex_lock(&async_mtx);
@@ -108,8 +107,8 @@ const char* AsyncVisitor::visit_full(const char *kbuf, size_t ksiz,
   pthread_mutex_unlock(&async_mtx);
   TRACE("... unlock\n");
 
-  TRACE("after: rv = %p, sp = %d\n", req->rv, req->sp);
-  const char *rv = (const char *)req->rv;
+  TRACE("after: rv = %p, sp = %ld\n", req->rv, req->sp);
+  const char *rv = reinterpret_cast<const char*>(req->rv);
   if (rv != NOP && rv != REMOVE) {
     *sp = req->sp;
   }
@@ -120,7 +119,7 @@ const char* AsyncVisitor::visit_full(const char *kbuf, size_t ksiz,
 }
 
 const char* AsyncVisitor::visit_empty(const char *kbuf, size_t ksiz, size_t *sp) {
-  TRACE("arguments: kbuf = %s, ksiz = %d, sp = %d\n", kbuf, ksiz, *sp);
+  TRACE("arguments: kbuf = %s, ksiz = %ld, sp = %ld\n", kbuf, ksiz, *sp);
 
   kc_async_visitor_req_t *req = (kc_async_visitor_req_t *)malloc(sizeof(kc_async_visitor_req_t));
   req->cb = cb_;
@@ -128,12 +127,12 @@ const char* AsyncVisitor::visit_empty(const char *kbuf, size_t ksiz, size_t *sp)
   req->done.set(0);
   req->type = KC_ASYNC_VISIT_EMPTY;
   req->writable = writable_;
-  req->key = (char *)kbuf;
+  req->key = const_cast<char*>(kbuf);
   req->key_size = ksiz;
-  req->rv = (char *)NOP;
+  req->rv = const_cast<char*>(NOP);
   req->sp = *sp;
 
-  TRACE("before: rv = %s(%p), sp = %d\n", req->rv, req->rv, req->sp);
+  TRACE("before: rv = %s(%p), sp = %ld\n", req->rv, req->rv, req->sp);
 
   TRACE("lock ...\n");
   pthread_mutex_lock(&async_mtx);
@@ -153,8 +152,8 @@ const char* AsyncVisitor::visit_empty(const char *kbuf, size_t ksiz, size_t *sp)
   pthread_mutex_unlock(&async_mtx);
   TRACE("... unlock\n");
 
-  TRACE("after: rv = %p, sp = %d\n", req->rv, req->sp);
-  const char *rv = (const char *)req->rv;
+  TRACE("after: rv = %p, sp = %ld\n", req->rv, req->sp);
+  const char *rv = reinterpret_cast<const char *>(req->rv);
   if (rv != NOP && rv != REMOVE) {
     *sp = req->sp;
   }
@@ -182,7 +181,7 @@ AsyncFileProcessor::~AsyncFileProcessor() {
 }
 
 bool AsyncFileProcessor::process(const std::string &path, int64_t count, int64_t size) {
-  TRACE("arguments: path = %s, count = %ld, size = %ld\n", path.c_str(), count, size);
+  TRACE("arguments: path = %s, count = %lld, size = %lld\n", path.c_str(), count, size);
 
   kc_async_file_proc_req_t *req = (kc_async_file_proc_req_t *)malloc(sizeof(kc_async_file_proc_req_t));
   req->cb = cb_;
@@ -191,7 +190,7 @@ bool AsyncFileProcessor::process(const std::string &path, int64_t count, int64_t
   req->type = KC_ASYNC_FILE_PROCESS;
   req->count = count;
   req->size = size;
-  req->path = (char *)path.c_str();
+  req->path = const_cast<char*>(path.c_str());
   req->rv = false;
 
   TRACE("before: rv = %d\n", req->rv);
@@ -226,7 +225,7 @@ bool AsyncFileProcessor::process(const std::string &path, int64_t count, int64_t
 static void kc_async_req_done_notifier_cb(uv_idle_t *notifier, int status) {
   TRACE("notifier = %p, status = %d\n", notifier, status);
 
-  kc_async_base_req_t *req = static_cast<kc_async_base_req_t*>(notifier->data);
+  kc_async_base_req_t *req = reinterpret_cast<kc_async_base_req_t*>(notifier->data);
   assert(req != NULL);
 
   if (req->flag.get() == 1) {
@@ -247,7 +246,7 @@ static void kc_async_req_notifier_cb(uv_async_t *notifier, int status) {
       {
         kc_async_visitor_req_t *req = static_cast<kc_async_visitor_req_t*>(notifier->data);
         assert(req != NULL);
-        TRACE("req(%p): key = %s, key_size = %d, value = %s, value_size = %d\n", 
+        TRACE("req(%p): key = %s, key_size = %ld, value = %s, value_size = %ld\n", 
             req, req->key, req->key_size, req->value, req->value_size);
 
         Local<Value> ret;
@@ -256,7 +255,7 @@ static void kc_async_req_notifier_cb(uv_async_t *notifier, int status) {
         if (!req->cb->IsFunction()) {
           if (!req->cb->ToObject()->Has(method_name) 
               && !req->cb->ToObject()->Get(method_name)->IsFunction()) {
-            req->rv = (char *)PolyDB::Visitor::NOP;
+            req->rv = const_cast<char*>(PolyDB::Visitor::NOP);
           }
           cb = Local<Function>::New(Handle<Function>::Cast(req->cb->ToObject()->Get(method_name)));
         } else {
@@ -279,8 +278,7 @@ static void kc_async_req_notifier_cb(uv_async_t *notifier, int status) {
               if (ret->IsNumber()) {
                 int64_t num_ret = ret->IntegerValue();
                 if (num_ret == 1) {
-                  const char *rv = PolyDB::Visitor::REMOVE;
-                  req->rv = (char *)rv;
+                  req->rv = const_cast<char*>(PolyDB::Visitor::REMOVE);
                 }
               } else if (ret->IsString()) {
                 String::Utf8Value str_ret(ret->ToString());
@@ -298,9 +296,9 @@ static void kc_async_req_notifier_cb(uv_async_t *notifier, int status) {
       }
     case KC_ASYNC_VISIT_EMPTY:
       {
-        kc_async_visitor_req_t *req = static_cast<kc_async_visitor_req_t*>(notifier->data);
+        kc_async_visitor_req_t *req = reinterpret_cast<kc_async_visitor_req_t*>(notifier->data);
         assert(req != NULL);
-        TRACE("req(%p): key = %s, key_size = %d\n", req, req->key, req->key_size);
+        TRACE("req(%p): key = %s, key_size = %ld\n", req, req->key, req->key_size);
 
         Local<Value> ret;
         Local<String> method_name = String::NewSymbol("visit_empty");
@@ -308,7 +306,7 @@ static void kc_async_req_notifier_cb(uv_async_t *notifier, int status) {
         if (!req->cb->IsFunction()) {
           if (!req->cb->ToObject()->Has(method_name) 
               && !req->cb->ToObject()->Get(method_name)->IsFunction()) {
-            req->rv = (char *)PolyDB::Visitor::NOP;
+            req->rv = const_cast<char*>(PolyDB::Visitor::NOP);
           }
           cb = Local<Function>::New(Handle<Function>::Cast(req->cb->ToObject()->Get(method_name)));
         } else {
@@ -330,8 +328,7 @@ static void kc_async_req_notifier_cb(uv_async_t *notifier, int status) {
               if (ret->IsNumber()) {
                 int64_t num_ret = ret->IntegerValue();
                 if (num_ret == 1) {
-                  const char *rv = PolyDB::Visitor::REMOVE;
-                  req->rv = (char *)rv;
+                  req->rv = const_cast<char*>(PolyDB::Visitor::REMOVE);
                 }
               } else if (ret->IsString()) {
                 String::Utf8Value str_ret(ret->ToString());
@@ -349,9 +346,9 @@ static void kc_async_req_notifier_cb(uv_async_t *notifier, int status) {
       }
     case KC_ASYNC_FILE_PROCESS:
       {
-        kc_async_file_proc_req_t *req = static_cast<kc_async_file_proc_req_t*>(notifier->data);
+        kc_async_file_proc_req_t *req = reinterpret_cast<kc_async_file_proc_req_t*>(notifier->data);
         assert(req != NULL);
-        TRACE("req(%p): path = %s, count = %d, size = %d\n", req, req->path, req->count, req->size);
+        TRACE("req(%p): path = %s, count = %lld, size = %lld\n", req, req->path, req->count, req->size);
 
         Local<Value> ret;
         Local<Function> cb = Local<Function>::New(Handle<Function>::Cast(req->cb));
@@ -379,6 +376,8 @@ static void kc_async_req_notifier_cb(uv_async_t *notifier, int status) {
   async_req_done_notifier.data = notifier->data;
   uv_idle_start(&async_req_done_notifier, kc_async_req_done_notifier_cb);
 }
+
+
 
 void kc_async_init(uv_loop_t *loop) {
   TRACE("arguments: loop = %p\n", loop);

@@ -16,11 +16,15 @@ using namespace kyotocabinet;
 
 
 class CursorWrap;
+class MapReduceWrap;
 
 
 class PolyDBWrap : public ObjectWrap {
   friend class CursorWrap;
+  friend class MapReduceWrap;
   public:
+    //Persistent<Function> mapreduce_ctor;
+    
     static void Init(Handle<Object> target);
     PolyDB::Cursor* Cursor();
 
@@ -66,7 +70,8 @@ class PolyDBWrap : public ObjectWrap {
     static Handle<Value> EndTransaction(const Arguments &args);
     static Handle<Value> Synchronize(const Arguments &args);
     static Handle<Value> Occupy(const Arguments &args);
-
+    static Handle<Value> MapReduce(const Arguments &args);
+    
     static void OnWork(uv_work_t *work_req);
     static void OnWorkDone(uv_work_t *work_req);
 };

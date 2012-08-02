@@ -14,6 +14,7 @@
 #include <kcdbext.h>
 #include <kcdb.h>
 
+
 using namespace v8;
 namespace kc = kyotocabinet;
 
@@ -344,32 +345,32 @@ namespace kc = kyotocabinet;
     req->result = db->error().code();   \
   }                                     \
 
-#define DO_CHAR_PARAM_CMN_EXECUTE(Method, WorkReq)                         \
-  kc_char_cmn_req_t *req = static_cast<kc_char_cmn_req_t*>(WorkReq->data); \
-  if (req->str == NULL) {                                                  \
-    req->result = PolyDB::Error::INVALID;                                  \
-  } else {                                                                 \
-    if (!db->Method(req->str)) {                                           \
-      req->result = db->error().code();                                    \
-    }                                                                      \
-  }                                                                        \
+#define DO_CHAR_PARAM_CMN_EXECUTE(Method, WorkReq)                              \
+  kc_char_cmn_req_t *req = reinterpret_cast<kc_char_cmn_req_t*>(WorkReq->data); \
+  if (req->str == NULL) {                                                       \
+    req->result = PolyDB::Error::INVALID;                                       \
+  } else {                                                                      \
+    if (!db->Method(req->str)) {                                                \
+      req->result = db->error().code();                                         \
+    }                                                                           \
+  }                                                                             \
 
-#define DO_BOOL_PARAM_CMN_EXECUTE(Method, WorkReq)                                \
-  kc_boolean_cmn_req_t *req = static_cast<kc_boolean_cmn_req_t*>(WorkReq->data);  \
-  if (!db->Method(req->flag)) {                                                   \
-    req->result = db->error().code();                                             \
-  }                                                                               \
+#define DO_BOOL_PARAM_CMN_EXECUTE(Method, WorkReq)                                     \
+  kc_boolean_cmn_req_t *req = reinterpret_cast<kc_boolean_cmn_req_t*>(WorkReq->data);  \
+  if (!db->Method(req->flag)) {                                                        \
+    req->result = db->error().code();                                                  \
+  }                                                                                    \
 
-#define DO_RET_EXECUTE(Method, WorkReq)                             \
-  kc_ret_req_t *req = static_cast<kc_ret_req_t*>(WorkReq->data);    \
-  req->ret = db->Method();                                          \
-  TRACE("%s: ret = %d\n", #Method, req->ret);                       \
-  if (req->ret == -1) {                                             \
-    req->result = db->error().code();                               \
-  }                                                                 \
+#define DO_RET_EXECUTE(Method, WorkReq)                                  \
+  kc_ret_req_t *req = reinterpret_cast<kc_ret_req_t*>(WorkReq->data);    \
+  req->ret = db->Method();                                               \
+  TRACE("%s: ret = %d\n", #Method, req->ret);                            \
+  if (req->ret == -1) {                                                  \
+    req->result = db->error().code();                                    \
+  }                                                                      \
 
 #define DO_KV_V_RET_EXECUTE(Method, WorkReq)                                         \
-  kc_kv_req_t *req = static_cast<kc_kv_req_t*>(WorkReq->data);                       \
+  kc_kv_req_t *req = reinterpret_cast<kc_kv_req_t*>(WorkReq->data);                  \
   size_t value_size;                                                                 \
   if (req->key == NULL) {                                                            \
     req->result = PolyDB::Error::INVALID;                                            \
@@ -381,20 +382,20 @@ namespace kc = kyotocabinet;
     }                                                                                \
   }                                                                                  \
 
-#define DO_KV_EXECUTE(Method, WorkReq)                            \
-  kc_kv_req_t *req = static_cast<kc_kv_req_t*>(WorkReq->data);    \
-  TRACE("key = %s, value = %s\n", req->key, req->value);          \
-  if (req->key == NULL || req->value == NULL) {                   \
-    req->result = PolyDB::Error::INVALID;                         \
-  } else {                                                        \
-    if (!db->Method(req->key, strlen(req->key),                   \
-                    req->value, strlen(req->value))) {            \
-      req->result = db->error().code();                           \
-    }                                                             \
-  }                                                               \
+#define DO_KV_EXECUTE(Method, WorkReq)                                 \
+  kc_kv_req_t *req = reinterpret_cast<kc_kv_req_t*>(WorkReq->data);    \
+  TRACE("key = %s, value = %s\n", req->key, req->value);               \
+  if (req->key == NULL || req->value == NULL) {                        \
+    req->result = PolyDB::Error::INVALID;                              \
+  } else {                                                             \
+    if (!db->Method(req->key, strlen(req->key),                        \
+                    req->value, strlen(req->value))) {                 \
+      req->result = db->error().code();                                \
+    }                                                                  \
+  }                                                                    \
 
 #define DO_MATCH_CMN_EXECUTE(Method, WorkReq)                                               \
-  kc_match_cmn_req_t *req = static_cast<kc_match_cmn_req_t*>(WorkReq->data);                \
+  kc_match_cmn_req_t *req = reinterpret_cast<kc_match_cmn_req_t*>(WorkReq->data);           \
   if (req->str == NULL) {                                                                   \
     req->result = PolyDB::Error::INVALID;                                                   \
   } else {                                                                                  \
@@ -673,6 +674,7 @@ PolyDBWrap::PolyDBWrap() {
 }
 
 PolyDBWrap::~PolyDBWrap() {
+  //mapreduce_ctor.Dispose();
   assert(db_ != NULL);
   TRACE("destor: db_ = %p\n", db_);
   delete db_;
@@ -1890,7 +1892,7 @@ Handle<Value> PolyDBWrap::Occupy(const Arguments &args) {
 void PolyDBWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
 
-  kc_req_t *req = static_cast<kc_req_t *>(work_req->data);
+  kc_req_t *req = reinterpret_cast<kc_req_t*>(work_req->data);
   PolyDBWrap *wrapdb = req->wrapdb;
   assert(wrapdb != NULL);
   PolyDB *db = wrapdb->db_;
@@ -1900,7 +1902,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
   switch (req->type) {
     case KC_OPEN:
       {
-        kc_open_req_t *open_req = static_cast<kc_open_req_t *>(work_req->data);
+        kc_open_req_t *open_req = reinterpret_cast<kc_open_req_t*>(work_req->data);
         TRACE("open: path = %s(%p), mode = %d\n", open_req->path, open_req->path, open_req->mode);
         if (!db->open(std::string(open_req->path), open_req->mode)) {
           req->result = db->error().code();
@@ -1923,7 +1925,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       { DO_KV_EXECUTE(append, work_req); break; }
     case KC_REMOVE:
       {
-        kc_char_cmn_req_t *remove_req = static_cast<kc_char_cmn_req_t*>(work_req->data);
+        kc_char_cmn_req_t *remove_req = reinterpret_cast<kc_char_cmn_req_t*>(work_req->data);
         TRACE("remove: key = %s\n", remove_req->str);
         if (remove_req->str == NULL) {
           req->result = PolyDB::Error::INVALID;
@@ -1940,7 +1942,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       { DO_KV_V_RET_EXECUTE(seize, work_req); break; }
     case KC_INCREMENT:
       {
-        kc_increment_req_t *increment_req = static_cast<kc_increment_req_t *>(work_req->data);
+        kc_increment_req_t *increment_req = reinterpret_cast<kc_increment_req_t*>(work_req->data);
         TRACE("increment: key = %s, num = %lld, orig = %lld\n", increment_req->key, increment_req->num, increment_req->orig);
         if (increment_req->key == NULL) {
           increment_req->result = PolyDB::Error::INVALID;
@@ -1957,7 +1959,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_INCREMENT_DOUBLE:
       {
-        kc_increment_double_req_t *inc_dbl_req = static_cast<kc_increment_double_req_t *>(work_req->data);
+        kc_increment_double_req_t *inc_dbl_req = reinterpret_cast<kc_increment_double_req_t*>(work_req->data);
         TRACE("increment_double: key = %s, num = %f, orig = %f\n", inc_dbl_req->key, inc_dbl_req->num, inc_dbl_req->orig);
         if (inc_dbl_req->key == NULL) {
           inc_dbl_req->result = PolyDB::Error::INVALID;
@@ -1974,7 +1976,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_CAS:
       {
-        kc_cas_req_t *cas_req = static_cast<kc_cas_req_t *>(work_req->data);
+        kc_cas_req_t *cas_req = reinterpret_cast<kc_cas_req_t*>(work_req->data);
         TRACE("cas: key = %s, oval = %s, nval = %s\n", cas_req->key, cas_req->oval, cas_req->nval);
         if (cas_req->key == NULL) {
           cas_req->result = PolyDB::Error::INVALID;
@@ -1993,7 +1995,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       { DO_RET_EXECUTE(size, work_req); break; }
     case KC_PATH:
       {
-        kc_char_ret_req_t *char_ret_req = static_cast<kc_char_ret_req_t*>(work_req->data);
+        kc_char_ret_req_t *char_ret_req = reinterpret_cast<kc_char_ret_req_t*>(work_req->data);
         const std::string &path = db->path();
         TRACE("path = %s\n", path.c_str());
         if (path.size() > 0) {
@@ -2005,7 +2007,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_STATUS:
       {
-        kc_strmap_ret_req_t *strmap_ret_req = static_cast<kc_strmap_ret_req_t*>(work_req->data);
+        kc_strmap_ret_req_t *strmap_ret_req = reinterpret_cast<kc_strmap_ret_req_t*>(work_req->data);
         strmap_ret_req->ret = new StringMap();
         if (!db->status(strmap_ret_req->ret)) {
           strmap_ret_req->result = db->error().code();
@@ -2014,7 +2016,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_CHECK:
       {
-        kc_check_req_t *check_req = static_cast<kc_check_req_t*>(work_req->data);
+        kc_check_req_t *check_req = reinterpret_cast<kc_check_req_t*>(work_req->data);
         if (check_req->key == NULL) {
           check_req->result = PolyDB::Error::INVALID;
         } else {
@@ -2027,7 +2029,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_GET_BULK:
       {
-        kc_get_bulk_req_t *gb_req = static_cast<kc_get_bulk_req_t*>(work_req->data);
+        kc_get_bulk_req_t *gb_req = reinterpret_cast<kc_get_bulk_req_t*>(work_req->data);
         if (gb_req->keys == NULL) {
           gb_req->result = PolyDB::Error::INVALID;
         } else {
@@ -2042,7 +2044,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_SET_BULK:
       {
-        kc_set_bulk_req_t *sb_req = static_cast<kc_set_bulk_req_t*>(work_req->data);
+        kc_set_bulk_req_t *sb_req = reinterpret_cast<kc_set_bulk_req_t*>(work_req->data);
         if (sb_req->recs == NULL) {
           sb_req->result = PolyDB::Error::INVALID;
         } else {
@@ -2057,7 +2059,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_REMOVE_BULK:
       {
-        kc_remove_bulk_req_t *rb_req = static_cast<kc_remove_bulk_req_t*>(work_req->data);
+        kc_remove_bulk_req_t *rb_req = reinterpret_cast<kc_remove_bulk_req_t*>(work_req->data);
         if (rb_req->keys == NULL) {
           rb_req->result = PolyDB::Error::INVALID;
         } else {
@@ -2076,7 +2078,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       { DO_MATCH_CMN_EXECUTE(match_regex, work_req); break; }
     case KC_MATCH_SIMILAR:
       {
-        kc_match_similar_req_t *ms_req = static_cast<kc_match_similar_req_t*>(work_req->data);
+        kc_match_similar_req_t *ms_req = reinterpret_cast<kc_match_similar_req_t*>(work_req->data);
         if (ms_req->str == NULL) {
           ms_req->result = PolyDB::Error::INVALID;
         } else {
@@ -2093,7 +2095,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       { DO_CHAR_PARAM_CMN_EXECUTE(copy, work_req); break; }
     case KC_MERGE:
       {
-        kc_merge_req_t *merge_req = static_cast<kc_merge_req_t*>(work_req->data);
+        kc_merge_req_t *merge_req = reinterpret_cast<kc_merge_req_t*>(work_req->data);
         TRACE("merge: srcary = %p, srcnum = %d, mode = %d\n", merge_req->srcary, merge_req->srcnum, merge_req->mode);
         if (merge_req->srcary == NULL || merge_req->srcnum == -1 ||
             !(merge_req->mode == PolyDB::MSET || 
@@ -2113,7 +2115,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       { DO_CHAR_PARAM_CMN_EXECUTE(load_snapshot, work_req); break; }
     case KC_ACCEPT:
       {
-        kc_accept_req_t *accept_req = static_cast<kc_accept_req_t*>(work_req->data);
+        kc_accept_req_t *accept_req = reinterpret_cast<kc_accept_req_t*>(work_req->data);
         TRACE("accept: key = %s, visitor = %p, writable = %d\n", accept_req->key, &accept_req->visitor, accept_req->writable);
         if (accept_req->key == NULL || accept_req->visitor.IsEmpty()) {
           req->result = PolyDB::Error::INVALID;
@@ -2127,7 +2129,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_ACCEPT_BULK:
       {
-        kc_accept_bulk_req_t *accept_req = static_cast<kc_accept_bulk_req_t*>(work_req->data);
+        kc_accept_bulk_req_t *accept_req = reinterpret_cast<kc_accept_bulk_req_t*>(work_req->data);
         TRACE("accept_bulk : keys = %p, visitor = %p, writable = %d\n", accept_req->keys, &accept_req->visitor, accept_req->writable);
         if (accept_req->keys == NULL || accept_req->visitor.IsEmpty()) {
           req->result = PolyDB::Error::INVALID;
@@ -2141,7 +2143,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_ITERATE:
       {
-        kc_accept_req_t *ite_req = static_cast<kc_accept_req_t*>(work_req->data);
+        kc_accept_req_t *ite_req = reinterpret_cast<kc_accept_req_t*>(work_req->data);
         TRACE("iterate: visitor = %p, writable = %d\n", &ite_req->visitor, ite_req->writable);
         if (ite_req->visitor.IsEmpty()) {
           req->result = PolyDB::Error::INVALID;
@@ -2161,7 +2163,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       */
     case KC_SYNCHRONIZE:
       {
-        kc_file_processor_cmn_req_t *fproc_req = static_cast<kc_file_processor_cmn_req_t*>(work_req->data);
+        kc_file_processor_cmn_req_t *fproc_req = reinterpret_cast<kc_file_processor_cmn_req_t*>(work_req->data);
         TRACE("synchronize: hard = %d\n", fproc_req->flag);
         if (fproc_req->proc.IsEmpty()) {
           if (!db->synchronize(fproc_req->flag, NULL)) {
@@ -2177,7 +2179,7 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_OCCUPY:
       {
-        kc_file_processor_cmn_req_t *fproc_req = static_cast<kc_file_processor_cmn_req_t*>(work_req->data);
+        kc_file_processor_cmn_req_t *fproc_req = reinterpret_cast<kc_file_processor_cmn_req_t*>(work_req->data);
         TRACE("occupy: writable = %d\n", fproc_req->flag);
         if (fproc_req->proc.IsEmpty()) {
           if (!db->occupy(fproc_req->flag, NULL)) {

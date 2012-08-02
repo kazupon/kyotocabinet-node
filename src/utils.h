@@ -20,5 +20,8 @@
   }                                           \
 
 
+void doublesec2timespec(double sec, struct timespec *ts);
+
+
 #endif /* UTILS_H */
 
