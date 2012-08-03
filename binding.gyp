@@ -5,10 +5,10 @@
     }, 
     'target_defaults': {
         # HACK:S resolve exception throw compile error !!
+        'cflags!': [ '-fno-rtti', '-fno-exceptions' ],
+        'cflags_cc!': [ '-fno-rtti', '-fno-exceptions' ],
         'cflags': [ '-fexceptions' ],
         'cflags_cc': [ '-fexceptions' ],
-        'cflags!': [ '-fno-exceptions' ],
-        'cflags_cc!': [ '-fno-exception' ],
         # HACK:E resolve exception throw compile error !!
         'configurations': {
             'Debug': {
