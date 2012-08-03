@@ -22,7 +22,7 @@
     'targets': [{
         'target_name': 'kyotocabinet',
         'dependencies': [
-          'kyotocabinet_core'
+            'kyotocabinet_core'
         ],
         'sources': [
             './src/debug.c',
@@ -41,7 +41,7 @@
         'include_dirs': [
             '<(kyotocabinet_shared_include_dir)'
         ], 
-        'cflags': [ '-fcxx-exceptions', '-g', '-O0' ],
+        'cflags': [ '-g', '-O0' ],
         'ldflags': [],
         'conditions': [[
             'OS == "win"', {
