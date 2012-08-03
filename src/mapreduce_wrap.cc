@@ -554,6 +554,8 @@ void MapReduceWrap::OnWorkDone(uv_work_t *work_req) {
   //
   // releases
   //
+  req->wrapmapreduce->Unref();
+  req->cb.Dispose();
 
   switch (req->type) {
     case KC_MAPREDUCE_EXECUTE:
@@ -570,9 +572,7 @@ void MapReduceWrap::OnWorkDone(uv_work_t *work_req) {
       assert(0);
   }
 
-  req->wrapmapreduce->Unref();
   req->wrapmapreduce = NULL;
-  req->cb.Dispose();
 
   work_req->data = NULL;
   free(work_req);
