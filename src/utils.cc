@@ -5,6 +5,8 @@
 
 
 #include "utils.h"
+#include <cstdlib>
+#include <time.h>
 #include <math.h>
 #include <sys/time.h>
 #include <assert.h>
