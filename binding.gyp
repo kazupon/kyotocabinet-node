@@ -42,7 +42,7 @@
             '<(kyotocabinet_shared_include_dir)'
         ], 
         'cflags': [ '-g', '-O0' ],
-        'ldflags': [],
+        'ldflags': [ '-lz' ],
         'conditions': [[
             'OS == "win"', {
             }
