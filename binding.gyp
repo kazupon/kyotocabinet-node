@@ -25,7 +25,6 @@
             'kyotocabinet_core'
         ],
         'sources': [
-            './src/debug.c',
             './src/utils.cc',
             './src/async.cc',
             './src/error_wrap.cc',
