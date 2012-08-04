@@ -80,6 +80,9 @@ typedef struct kc_cur_cmn_req_s {
 } kc_cur_cmn_req_t;
 
 
+Persistent<Function> CursorWrap::ctor;
+
+
 CursorWrap::CursorWrap(PolyDB::Cursor *cursor) : cursor_(cursor) {
   TRACE("ctor: cursor_ = %p\n", cursor_);
   assert(cursor_ != NULL);
@@ -98,6 +101,7 @@ CursorWrap::~CursorWrap() {
   wrapdb_ = NULL;
 }
 
+
 void CursorWrap::SetWrapDB(PolyDBWrap *wrapdb) {
   wrapdb_ = wrapdb;
   TRACE("wrapdb_ = %p\n", wrapdb_);
@@ -109,16 +113,15 @@ PolyDB::Error::Code CursorWrap::GetErrorCode() {
   return wrapdb_->db_->error().code();
 }
 
-
-Persistent<Function> CursorWrap::ctor;
-
-
 void CursorWrap::SendAsyncRequest(void *req) {
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  assert(req != NULL);
+
+  uv_work_t *uv_req = reinterpret_cast<uv_work_t*>(malloc(sizeof(uv_work_t)));
+  assert(uv_req != NULL);
   uv_req->data = req;
   TRACE("uv_work_t = %p, type = %d\n", uv_req, ((kc_cur_req_t *)req)->type);
 
-  int ret = uv_queue_work(uv_default_loop(), uv_req, CursorWrap::OnWork, CursorWrap::OnWorkDone);
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
   TRACE("uv_queue_work: ret=%d\n", ret);
 }
 
@@ -134,7 +137,9 @@ Handle<Value> CursorWrap::New(const Arguments &args) {
 
   Local<String> ctor_sym = String::NewSymbol("constructor");
   Local<String> name_sym = String::NewSymbol("name");
-  String::Utf8Value ctorName(args[0]->ToObject()->Get(ctor_sym)->ToObject()->Get(name_sym)->ToString());
+  String::Utf8Value ctorName(
+    args[0]->ToObject()->Get(ctor_sym)->ToObject()->Get(name_sym)->ToString()
+  );
   if (strcmp("DB", *ctorName)) {
     ThrowException(Exception::Error(String::New("Invalid parameter")));
     return scope.Close(args.This());
@@ -145,7 +150,8 @@ Handle<Value> CursorWrap::New(const Arguments &args) {
     CursorWrap *cursorWrap = new CursorWrap(dbWrap->Cursor());
     cursorWrap->Wrap(args.This());
   } else {
-    kc_cur_create_req_t *req = (kc_cur_create_req_t *)malloc(sizeof(kc_cur_create_req_t));
+    kc_cur_create_req_t *req = 
+      reinterpret_cast<kc_cur_create_req_t*>(malloc(sizeof(kc_cur_create_req_t)));
     req->type = KC_CUR_CREATE;
     req->wrapcur = NULL;
     req->result = PolyDB::Error::SUCCESS;
@@ -198,7 +204,9 @@ Handle<Value> CursorWrap::Jump(const Arguments &args) {
     return scope.Close(args.This());
   }
 
-  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  kc_cur_cmn_req_t *req = 
+    reinterpret_cast<kc_cur_cmn_req_t*>(malloc(sizeof(kc_cur_cmn_req_t)));
+  assert(req != NULL);
   KC_CUR_REQ_INIT(KC_CUR_JUMP, wrapCur, NULL, NULL, false, false);
 
   if (args.Length() == 1) {
@@ -235,7 +243,9 @@ Handle<Value> CursorWrap::JumpBack(const Arguments &args) {
     return scope.Close(args.This());
   }
 
-  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  kc_cur_cmn_req_t *req = 
+    reinterpret_cast<kc_cur_cmn_req_t*>(malloc(sizeof(kc_cur_cmn_req_t)));
+  assert(req != NULL);
   KC_CUR_REQ_INIT(KC_CUR_JUMP_BACK, wrapCur, NULL, NULL, false, false);
 
   if (args.Length() == 1) {
@@ -271,7 +281,9 @@ Handle<Value> CursorWrap::Step(const Arguments &args) {
     return scope.Close(args.This());
   }
 
-  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  kc_cur_cmn_req_t *req = 
+    reinterpret_cast<kc_cur_cmn_req_t*>(malloc(sizeof(kc_cur_cmn_req_t)));
+  assert(req != NULL);
   KC_CUR_REQ_INIT(KC_CUR_STEP, wrapCur, NULL, NULL, false, false);
 
   req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
@@ -296,7 +308,9 @@ Handle<Value> CursorWrap::StepBack(const Arguments &args) {
     return scope.Close(args.This());
   }
 
-  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  kc_cur_cmn_req_t *req = 
+    reinterpret_cast<kc_cur_cmn_req_t*>(malloc(sizeof(kc_cur_cmn_req_t)));
+  assert(req != NULL);
   KC_CUR_REQ_INIT(KC_CUR_STEP_BACK, wrapCur, NULL, NULL, false, false);
 
   req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
@@ -322,7 +336,9 @@ Handle<Value> CursorWrap::Get(const Arguments &args) {
     return scope.Close(args.This());
   }
 
-  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  kc_cur_cmn_req_t *req = 
+    reinterpret_cast<kc_cur_cmn_req_t*>(malloc(sizeof(kc_cur_cmn_req_t)));
+  assert(req != NULL);
   KC_CUR_REQ_INIT(KC_CUR_GET, wrapCur, NULL, NULL, false, false);
 
   if (args.Length() == 1) {
@@ -357,7 +373,9 @@ Handle<Value> CursorWrap::GetKey(const Arguments &args) {
     return scope.Close(args.This());
   }
 
-  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  kc_cur_cmn_req_t *req = 
+    reinterpret_cast<kc_cur_cmn_req_t*>(malloc(sizeof(kc_cur_cmn_req_t)));
+  assert(req != NULL);
   KC_CUR_REQ_INIT(KC_CUR_GET_KEY, wrapCur, NULL, NULL, false, false);
 
   if (args.Length() == 1) {
@@ -392,7 +410,9 @@ Handle<Value> CursorWrap::GetValue(const Arguments &args) {
     return scope.Close(args.This());
   }
 
-  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  kc_cur_cmn_req_t *req = 
+    reinterpret_cast<kc_cur_cmn_req_t*>(malloc(sizeof(kc_cur_cmn_req_t)));
+  assert(req != NULL);
   KC_CUR_REQ_INIT(KC_CUR_GET_VALUE, wrapCur, NULL, NULL, false, false);
 
   if (args.Length() == 1) {
@@ -426,7 +446,9 @@ Handle<Value> CursorWrap::Remove(const Arguments &args) {
     return scope.Close(args.This());
   }
 
-  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  kc_cur_cmn_req_t *req = 
+    reinterpret_cast<kc_cur_cmn_req_t*>(malloc(sizeof(kc_cur_cmn_req_t)));
+  assert(req != NULL);
   KC_CUR_REQ_INIT(KC_CUR_REMOVE, wrapCur, NULL, NULL, false, false);
 
   req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
@@ -451,7 +473,9 @@ Handle<Value> CursorWrap::Seize(const Arguments &args) {
     return scope.Close(args.This());
   }
 
-  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  kc_cur_cmn_req_t *req = 
+    reinterpret_cast<kc_cur_cmn_req_t*>(malloc(sizeof(kc_cur_cmn_req_t)));
+  assert(req != NULL);
   KC_CUR_REQ_INIT(KC_CUR_SEIZE, wrapCur, NULL, NULL, false, false);
 
   req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
@@ -471,13 +495,17 @@ Handle<Value> CursorWrap::SetValue(const Arguments &args) {
   assert(wrapCur != NULL);
 
   if ( (args.Length() == 0) || (args.Length() == 1) ||
-       (args.Length() == 2 && (!args[0]->IsString() | (!args[1]->IsBoolean() & !args[1]->IsFunction()))) ||
-       (args.Length() == 3 && (!args[0]->IsString() | !args[1]->IsBoolean() | !args[2]->IsFunction())) ) {
+       (args.Length() == 2 && (!args[0]->IsString() | 
+                              (!args[1]->IsBoolean() & !args[1]->IsFunction()))) ||
+       (args.Length() == 3 && (!args[0]->IsString() | 
+                               !args[1]->IsBoolean() | !args[2]->IsFunction())) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  kc_cur_cmn_req_t *req = 
+    reinterpret_cast<kc_cur_cmn_req_t*>(malloc(sizeof(kc_cur_cmn_req_t)));
+  assert(req != NULL);
   KC_CUR_REQ_INIT(KC_CUR_SET_VALUE, wrapCur, NULL, NULL, false, false);
 
   if (args.Length() == 2) {
@@ -525,7 +553,9 @@ Handle<Value> CursorWrap::Accept(const Arguments &args) {
     return scope.Close(args.This());
   }
 
-  kc_cur_cmn_req_t *req = (kc_cur_cmn_req_t *)malloc(sizeof(kc_cur_cmn_req_t));
+  kc_cur_cmn_req_t *req = 
+    reinterpret_cast<kc_cur_cmn_req_t*>(malloc(sizeof(kc_cur_cmn_req_t)));
+  assert(req != NULL);
   KC_CUR_REQ_INIT(KC_CUR_ACCEPT, wrapCur, NULL, NULL, false, true);
 
   if (args.Length() == 1) {
@@ -533,7 +563,9 @@ Handle<Value> CursorWrap::Accept(const Arguments &args) {
       req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));
     } else if (args[0]->IsObject()) {
       if (args[0]->ToObject()->Has(visitor_sym)) {
-        req->visitor = Persistent<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+        req->visitor = Persistent<Object>::New(
+          Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym))
+        );
       }
       if (args[0]->ToObject()->Has(writable_sym)) {
         req->writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
@@ -544,7 +576,9 @@ Handle<Value> CursorWrap::Accept(const Arguments &args) {
     }
   } else {
     if (args[0]->ToObject()->Has(visitor_sym)) {
-      req->visitor = Persistent<Object>::New(Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym)));
+      req->visitor = Persistent<Object>::New(
+        Handle<Object>::Cast(args[0]->ToObject()->Get(visitor_sym))
+      );
     }
     if (args[0]->ToObject()->Has(writable_sym)) {
       req->writable = args[0]->ToObject()->Get(writable_sym)->BooleanValue();
@@ -565,20 +599,20 @@ Handle<Value> CursorWrap::Accept(const Arguments &args) {
 void CursorWrap::OnWork(uv_work_t *work_req) {
   TRACE("argument: work_req=%p\n", work_req);
 
-  kc_cur_req_t *req = static_cast<kc_cur_req_t*>(work_req->data);
+  kc_cur_req_t *req = reinterpret_cast<kc_cur_req_t*>(work_req->data);
   assert(req != NULL);
 
   // do operation
   switch (req->type) {
     case KC_CUR_CREATE:
       {
-        kc_cur_create_req_t *cur_req = static_cast<kc_cur_create_req_t*>(work_req->data);
+        kc_cur_create_req_t *cur_req = reinterpret_cast<kc_cur_create_req_t*>(work_req->data);
         cur_req->retcur = new CursorWrap(cur_req->wrapdb->Cursor());
         break;
       }
     case KC_CUR_JUMP:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         CursorWrap *wrapCur = cur_req->wrapcur;
         if (cur_req->key == NULL) {
           if (!wrapCur->cursor_->jump()) {
@@ -593,7 +627,7 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_CUR_JUMP_BACK:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         CursorWrap *wrapCur = cur_req->wrapcur;
         if (cur_req->key == NULL) {
           if (!wrapCur->cursor_->jump_back()) {
@@ -608,7 +642,7 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_CUR_STEP:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         CursorWrap *wrapCur = cur_req->wrapcur;
         if (!wrapCur->cursor_->step()) {
           cur_req->result = wrapCur->GetErrorCode();
@@ -617,7 +651,7 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_CUR_STEP_BACK:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         CursorWrap *wrapCur = cur_req->wrapcur;
         if (!wrapCur->cursor_->step_back()) {
           cur_req->result = wrapCur->GetErrorCode();
@@ -626,7 +660,7 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_CUR_GET:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         CursorWrap *wrapCur = cur_req->wrapcur;
         TRACE("cursor get: step = %d\n", cur_req->step);
         const char *value = NULL;
@@ -643,7 +677,7 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_CUR_GET_KEY:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         CursorWrap *wrapCur = cur_req->wrapcur;
         TRACE("cursor get_key: step = %d\n", cur_req->step);
         size_t key_size;
@@ -658,7 +692,7 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_CUR_GET_VALUE:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         CursorWrap *wrapCur = cur_req->wrapcur;
         TRACE("cursor get_value: step = %d\n", cur_req->step);
         size_t value_size;
@@ -673,7 +707,7 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_CUR_REMOVE:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         CursorWrap *wrapCur = cur_req->wrapcur;
         if (!wrapCur->cursor_->remove()) {
           cur_req->result = wrapCur->GetErrorCode();
@@ -682,7 +716,7 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_CUR_SEIZE:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         CursorWrap *wrapCur = cur_req->wrapcur;
         const char *value = NULL;
         size_t key_size, value_size;
@@ -698,7 +732,7 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_CUR_SET_VALUE:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         CursorWrap *wrapCur = cur_req->wrapcur;
         if (!wrapCur->cursor_->set_value(cur_req->value, strlen(cur_req->value), cur_req->step)) {
           cur_req->result = wrapCur->GetErrorCode();
@@ -707,7 +741,7 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
       }
     case KC_CUR_ACCEPT:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         CursorWrap *wrapCur = cur_req->wrapcur;
         AsyncVisitor visitor(cur_req->visitor, cur_req->writable);
         TRACE("cursor->accept: writable = %d, step = %d\n", cur_req->writable, cur_req->step);
@@ -729,7 +763,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
   HandleScope scope;
   TRACE("argument: work_req=%p\n", work_req);
 
-  kc_cur_req_t *req = static_cast<kc_cur_req_t*>(work_req->data);
+  kc_cur_req_t *req = reinterpret_cast<kc_cur_req_t*>(work_req->data);
   assert(req != NULL);
 
   // init callback arguments.
@@ -747,7 +781,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
       Local<String> message = String::NewSymbol(name);
       Local<Value> err = Exception::Error(message);
       Local<Object> obj = err->ToObject();
-      obj->Set(String::NewSymbol("code"), Integer::New(req->result), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
+      DEFINE_JS_CONSTANT(obj, "code", req->result);
       argv[argc] = err;
     }
     argc++;
@@ -757,7 +791,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
   switch (req->type) {
     case KC_CUR_CREATE:
       {
-        kc_cur_create_req_t *cur_req = static_cast<kc_cur_create_req_t*>(work_req->data);
+        kc_cur_create_req_t *cur_req = reinterpret_cast<kc_cur_create_req_t*>(work_req->data);
         if (cur_req->retcur == NULL) {
           Local<String> message = String::NewSymbol("Cannot create object");
           argv[argc] = Exception::Error(message);
@@ -774,7 +808,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_CUR_SEIZE:
       {
         if (req->result == PolyDB::Error::SUCCESS) {
-          kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+          kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
           argv[argc++] = String::New(cur_req->key, strlen(cur_req->key));
           argv[argc++] = String::New(cur_req->value, strlen(cur_req->value));
         }
@@ -783,7 +817,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_CUR_GET_KEY:
       {
         if (req->result == PolyDB::Error::SUCCESS) {
-          kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+          kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
           argv[argc++] = String::New(cur_req->key, strlen(cur_req->key));
         }
         break;
@@ -791,7 +825,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_CUR_GET_VALUE:
       {
         if (req->result == PolyDB::Error::SUCCESS) {
-          kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+          kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
           argv[argc++] = String::New(cur_req->value, strlen(cur_req->value));
         }
         break;
@@ -831,7 +865,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
   switch (req->type) {
     case KC_CUR_CREATE:
       {
-        kc_cur_create_req_t *cur_req = static_cast<kc_cur_create_req_t*>(work_req->data);
+        kc_cur_create_req_t *cur_req = reinterpret_cast<kc_cur_create_req_t*>(work_req->data);
         cur_req->wrapdb->Unref();
         cur_req->wrapdb = NULL;
         cur_req->self.Dispose();
@@ -841,7 +875,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
       }
     case KC_CUR_ACCEPT:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         cur_req->visitor.Dispose();
         free(cur_req);
         break;
@@ -849,7 +883,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_CUR_JUMP:
     case KC_CUR_JUMP_BACK:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(cur_req, key);
         free(cur_req);
         break;
@@ -858,14 +892,14 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_CUR_STEP_BACK:
     case KC_CUR_REMOVE:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         free(cur_req);
         break;
       }
     case KC_CUR_GET:
     case KC_CUR_SEIZE:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(cur_req, key);
         SAFE_REQ_ATTR_FREE(cur_req, value);
         free(cur_req);
@@ -873,7 +907,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
       }
     case KC_CUR_GET_KEY:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(cur_req, key);
         free(cur_req);
         break;
@@ -881,7 +915,7 @@ void CursorWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_CUR_GET_VALUE:
     case KC_CUR_SET_VALUE:
       {
-        kc_cur_cmn_req_t *cur_req = static_cast<kc_cur_cmn_req_t*>(work_req->data);
+        kc_cur_cmn_req_t *cur_req = reinterpret_cast<kc_cur_cmn_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(cur_req, value);
         free(cur_req);
         break;
@@ -907,22 +941,22 @@ void CursorWrap::Init(Handle<Object> target) {
 
   // prototype(s)
   Local<ObjectTemplate> prottpl = tpl->PrototypeTemplate();
-  prottpl->Set(String::NewSymbol("jump"), FunctionTemplate::New(Jump)->GetFunction());
-  prottpl->Set(String::NewSymbol("jump_back"), FunctionTemplate::New(JumpBack)->GetFunction());
-  prottpl->Set(String::NewSymbol("step"), FunctionTemplate::New(Step)->GetFunction());
-  prottpl->Set(String::NewSymbol("step_back"), FunctionTemplate::New(StepBack)->GetFunction());
-  prottpl->Set(String::NewSymbol("get"), FunctionTemplate::New(Get)->GetFunction());
-  prottpl->Set(String::NewSymbol("get_key"), FunctionTemplate::New(GetKey)->GetFunction());
-  prottpl->Set(String::NewSymbol("get_value"), FunctionTemplate::New(GetValue)->GetFunction());
-  prottpl->Set(String::NewSymbol("remove"), FunctionTemplate::New(Remove)->GetFunction());
-  prottpl->Set(String::NewSymbol("seize"), FunctionTemplate::New(Seize)->GetFunction());
-  prottpl->Set(String::NewSymbol("set_value"), FunctionTemplate::New(SetValue)->GetFunction());
-  prottpl->Set(String::NewSymbol("accept"), FunctionTemplate::New(Accept)->GetFunction());
+  DEFINE_JS_METHOD(prottpl, "jump", Jump);
+  DEFINE_JS_METHOD(prottpl, "jump_back", JumpBack);
+  DEFINE_JS_METHOD(prottpl, "step", Step);
+  DEFINE_JS_METHOD(prottpl, "step_back", StepBack);
+  DEFINE_JS_METHOD(prottpl, "get", Get);
+  DEFINE_JS_METHOD(prottpl, "get_key", GetKey);
+  DEFINE_JS_METHOD(prottpl, "get_value", GetValue);
+  DEFINE_JS_METHOD(prottpl, "remove", Remove);
+  DEFINE_JS_METHOD(prottpl, "seize", Seize);
+  DEFINE_JS_METHOD(prottpl, "set_value", SetValue);
+  DEFINE_JS_METHOD(prottpl, "accept", Accept);
 
   ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("Cursor"), ctor);
 
   // define function(s)
-  ctor->Set(String::NewSymbol("create"), FunctionTemplate::New(Create)->GetFunction());
+  DEFINE_JS_METHOD(ctor, "create", Create);
 }
 

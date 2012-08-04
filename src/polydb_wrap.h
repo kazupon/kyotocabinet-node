@@ -74,6 +74,8 @@ class PolyDBWrap : public ObjectWrap {
     
     static void OnWork(uv_work_t *work_req);
     static void OnWorkDone(uv_work_t *work_req);
+
+    static void SendAsyncRequest(void *req);
 };
 
 #endif /* POLYDB_WRAP_H */

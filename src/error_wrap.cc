@@ -5,9 +5,10 @@
 
 #define BUILDING_NODE_EXTENSION
 
-#include <kcpolydb.h>
 #include "error_wrap.h"
+#include <kcpolydb.h>
 #include <assert.h>
+#include "utils.h"
 
 using namespace v8;
 using namespace kyotocabinet;
@@ -31,25 +32,19 @@ void ErrorWrap::Init(Handle<Object> target) {
   Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
   tpl->SetClassName(String::NewSymbol("Error"));
 
-  Local<ObjectTemplate> insttpl = tpl->InstanceTemplate();
-  insttpl->SetInternalFieldCount(1);
-
-  // prototype
-  Local<ObjectTemplate> prottpl = tpl->PrototypeTemplate();
-  //tpl->PrototypeTemplate()->Set(String::NewSymbol("plusOne"), FunctionTemplate::New(PlusOne)->GetFunction());
-
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("Error"), ctor);
-  ctor->Set(String::NewSymbol("SUCCESS"), Integer::New(PolyDB::Error::SUCCESS), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("NOIMPL"), Integer::New(PolyDB::Error::NOIMPL), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("INVALID"), Integer::New(PolyDB::Error::INVALID), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("NOREPOS"), Integer::New(PolyDB::Error::NOREPOS), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("NOPERM"), Integer::New(PolyDB::Error::NOPERM), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("BROKEN"), Integer::New(PolyDB::Error::BROKEN), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("DUPREC"), Integer::New(PolyDB::Error::DUPREC), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("NOREC"), Integer::New(PolyDB::Error::NOREC), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("LOGIC"), Integer::New(PolyDB::Error::LOGIC), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("SYSTEM"), Integer::New(PolyDB::Error::SYSTEM), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("MISC"), Integer::New(PolyDB::Error::MISC), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
+
+  DEFINE_JS_CONSTANT(ctor, "SUCCESS", PolyDB::Error::SUCCESS);
+  DEFINE_JS_CONSTANT(ctor, "NOIMPL", PolyDB::Error::NOIMPL);
+  DEFINE_JS_CONSTANT(ctor, "INVALID", PolyDB::Error::INVALID);
+  DEFINE_JS_CONSTANT(ctor, "NOREPOS", PolyDB::Error::NOREPOS);
+  DEFINE_JS_CONSTANT(ctor, "NOPERM", PolyDB::Error::NOPERM);
+  DEFINE_JS_CONSTANT(ctor, "BROKEN", PolyDB::Error::BROKEN);
+  DEFINE_JS_CONSTANT(ctor, "DUPREC", PolyDB::Error::DUPREC);
+  DEFINE_JS_CONSTANT(ctor, "NOREC", PolyDB::Error::NOREC);
+  DEFINE_JS_CONSTANT(ctor, "LOGIC", PolyDB::Error::LOGIC);
+  DEFINE_JS_CONSTANT(ctor, "SYSTEM", PolyDB::Error::SYSTEM);
+  DEFINE_JS_CONSTANT(ctor, "MISC", PolyDB::Error::MISC);
 }
 

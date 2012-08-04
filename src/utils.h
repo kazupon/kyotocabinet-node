@@ -19,6 +19,18 @@
     Req->AttrName = NULL;                     \
   }                                           \
 
+#define DEFINE_JS_CONSTANT(Target, Name, Value)             \
+  Target->Set(                                              \
+    String::NewSymbol(Name), Integer::New(Value),           \
+    static_cast<PropertyAttribute>(ReadOnly | DontDelete)   \
+  );                                                        \
+
+#define DEFINE_JS_METHOD(Target, Name, Method)    \
+  Target->Set(                                    \
+    String::NewSymbol(Name),                      \
+    FunctionTemplate::New(Method)->GetFunction()  \
+  );                                              \
+
 
 void doublesec2timespec(double sec, struct timespec *ts);
 

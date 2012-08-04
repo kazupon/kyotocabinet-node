@@ -19,46 +19,41 @@ using namespace v8;
 namespace kc = kyotocabinet;
 
 
-#define DEFINE_FUNC(Name, Type)                                             \
-  Handle<Value> PolyDBWrap::Name(const Arguments &args) {                   \
-    TRACE("%s\n", #Name);                                                   \
-    HandleScope scope;                                                      \
-                                                                            \
-    PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());          \
-    assert(obj != NULL);                                                    \
-                                                                            \
-    if ((args.Length() == 1 && (!args[0]->IsObject())                       \
-                              | !args[0]->IsFunction())) {                  \
-      ThrowException(Exception::TypeError(String::New("Bad argument")));    \
-      return scope.Close(args.This());                                      \
-    }                                                                       \
-                                                                            \
-    kc_req_t *req = (kc_req_t *)malloc(sizeof(kc_req_t));                   \
-    req->type = Type;                                                       \
-    req->result = PolyDB::Error::SUCCESS;                                   \
-    req->wrapdb = obj;                                                      \
-    req->cb.Clear();                                                        \
-                                                                            \
-    if (args.Length() > 0 && args[0]->IsFunction()) {                       \
-      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0])); \
-    }                                                                       \
-                                                                            \ 
-    uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));             \
-    uv_req->data = req;                                                     \
-    TRACE("uv_work_t = %p\n", uv_req);                                      \
-                                                                            \
-    int ret = uv_queue_work(uv_default_loop(), uv_req,                      \
-                            PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);    \
-    TRACE("uv_queue_work: ret=%d\n", ret);                                  \
-                                                                            \
-    obj->Ref();                                                             \
-    return scope.Close(args.This());                                        \
-  }                                                                         \
+#define DEFINE_FUNC(Name, Type)                                                     \
+  Handle<Value> PolyDBWrap::Name(const Arguments &args) {                           \
+    HandleScope scope;                                                              \
+    TRACE("%s\n", #Name);                                                           \
+                                                                                    \
+    PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());                  \
+    assert(obj != NULL);                                                            \
+                                                                                    \
+    if ((args.Length() == 1 && (!args[0]->IsObject())                               \
+                              | !args[0]->IsFunction())) {                          \
+      ThrowException(Exception::TypeError(String::New("Bad argument")));            \
+      return scope.Close(args.This());                                              \
+    }                                                                               \
+                                                                                    \
+    kc_req_t *req = reinterpret_cast<kc_req_t*>(malloc(sizeof(kc_req_t)));          \
+    assert(req != NULL);                                                            \
+    req->type = Type;                                                               \
+    req->result = PolyDB::Error::SUCCESS;                                           \
+    req->wrapdb = obj;                                                              \
+    req->cb.Clear();                                                                \
+                                                                                    \
+    if (args.Length() > 0 && args[0]->IsFunction()) {                               \
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));         \
+    }                                                                               \
+                                                                                    \ 
+    SendAsyncRequest(req);                                                          \
+                                                                                    \
+    obj->Ref();                                                                     \
+    return scope.Close(args.This());                                                \
+  }                                                                                 \
 
 #define DEFINE_CHAR_PARAM_FUNC(Name, Type)                                            \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                             \
-    TRACE("%s\n", #Name);                                                             \
     HandleScope scope;                                                                \
+    TRACE("%s\n", #Name);                                                             \
                                                                                       \
     PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());                    \
     assert(obj != NULL);                                                              \
@@ -69,7 +64,9 @@ namespace kc = kyotocabinet;
       return scope.Close(args.This());                                                \
     }                                                                                 \
                                                                                       \
-    kc_char_cmn_req_t *req = (kc_char_cmn_req_t *)malloc(sizeof(kc_char_cmn_req_t));  \
+    kc_char_cmn_req_t *req =                                                          \
+      reinterpret_cast<kc_char_cmn_req_t*>(malloc(sizeof(kc_char_cmn_req_t)));        \
+    assert(req != NULL);                                                              \
     req->type = Type;                                                                 \
     req->result = PolyDB::Error::SUCCESS;                                             \
     req->wrapdb = obj;                                                                \
@@ -89,117 +86,110 @@ namespace kc = kyotocabinet;
       req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));           \
     }                                                                                 \
                                                                                       \
-    uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));                       \
-    uv_req->data = req;                                                               \
-    TRACE("uv_work_t = %p\n", uv_req);                                                \
-                                                                                      \
-    int ret = uv_queue_work(uv_default_loop(), uv_req,                                \
-                            PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);              \
-    TRACE("uv_queue_work: ret=%d\n", ret);                                            \
+    SendAsyncRequest(req);                                                            \
                                                                                       \
     obj->Ref();                                                                       \
     return scope.Close(args.This());                                                  \
   }                                                                                   \
 
-#define DEFINE_BOOL_PARAM_FUNC(Name, Method, INIT_VALUE)                                                                \
-  Handle<Value> PolyDBWrap::Name(const Arguments &args) {                                                               \
-    TRACE("%s\n", #Name);                                                                                               \
-    HandleScope scope;                                                                                                  \
-                                                                                                                        \
-    PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());                                                      \
-    assert(obj != NULL);                                                                                                \
-                                                                                                                        \
-    if ( (args.Length() == 0) ||                                                                                        \
-         (args.Length() == 1 && (!args[0]->IsBoolean()) & !args[0]->IsFunction()) ) {                                   \
-      ThrowException(Exception::TypeError(String::New("Bad argument")));                                                \
-      return scope.Close(args.This());                                                                                  \
-    }                                                                                                                   \
-                                                                                                                        \ 
-    PolyDB::Error::Code result = PolyDB::Error::SUCCESS;                                                                \
-    Local<Function> cb;                                                                                                 \
-    bool flag = INIT_VALUE;                                                                                             \
-    cb.Clear();                                                                                                         \
-                                                                                                                        \ 
-    if (args.Length() == 1) {                                                                                           \
-      if (args[0]->IsFunction()) {                                                                                      \
-        cb = Local<Function>::New(Handle<Function>::Cast(args[0]));                                                     \
-      } else if (args[0]->IsBoolean()) {                                                                                \
-        flag = args[0]->BooleanValue();                                                                                 \
-      }                                                                                                                 \
-    } else {                                                                                                            \
-      flag = args[0]->BooleanValue();                                                                                   \
-      cb = Local<Function>::New(Handle<Function>::Cast(args[1]));                                                       \
-    }                                                                                                                   \
-                                                                                                                        \
-    TRACE("call %s: flag = %d\n", #Method, flag);                                                                       \
-    if (!obj->db_->Method(flag)) {                                                                                      \
-      result = obj->db_->error().code();                                                                                \
-    }                                                                                                                   \
-                                                                                                                        \ 
-    Local<Value> argv[1] = {                                                                                            \
-      Local<Value>::New(Null()),                                                                                        \
-    };                                                                                                                  \
-                                                                                                                        \ 
-    if (result != PolyDB::Error::SUCCESS) {                                                                             \
-      const char *name = PolyDB::Error::codename(result);                                                               \
-      Local<String> message = String::NewSymbol(name);                                                                  \
-      Local<Value> err = Exception::Error(message);                                                                     \
-      Local<Object> obj = err->ToObject();                                                                              \
-      obj->Set(String::NewSymbol("code"), Integer::New(result), static_cast<PropertyAttribute>(ReadOnly | DontDelete)); \
-      argv[0] = err;                                                                                                    \
-    }                                                                                                                   \
-                                                                                                                        \ 
-    if (!cb.IsEmpty()) {                                                                                                \
-      TryCatch try_catch;                                                                                               \
-      MakeCallback(obj->handle_, cb, 1, argv);                                                                          \
-      if (try_catch.HasCaught()) {                                                                                      \
-        FatalException(try_catch);                                                                                      \
-      }                                                                                                                 \
-    }                                                                                                                   \ 
-                                                                                                                        \ 
-    return scope.Close(args.This());                                                                                    \
-  }                                                                                                                     \
+#define DEFINE_BOOL_PARAM_FUNC(Name, Method, INIT_VALUE)                        \
+  Handle<Value> PolyDBWrap::Name(const Arguments &args) {                       \
+    HandleScope scope;                                                          \
+    TRACE("%s\n", #Name);                                                       \
+                                                                                \
+    PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());              \
+    assert(obj != NULL);                                                        \
+                                                                                \
+    if ( (args.Length() == 0) ||                                                \
+         (args.Length() == 1 && (!args[0]->IsBoolean()) &                       \
+                                 !args[0]->IsFunction()) ) {                    \
+      ThrowException(Exception::TypeError(String::New("Bad argument")));        \
+      return scope.Close(args.This());                                          \
+    }                                                                           \
+                                                                                \ 
+    PolyDB::Error::Code result = PolyDB::Error::SUCCESS;                        \
+    Local<Function> cb;                                                         \
+    bool flag = INIT_VALUE;                                                     \
+    cb.Clear();                                                                 \
+                                                                                \ 
+    if (args.Length() == 1) {                                                   \
+      if (args[0]->IsFunction()) {                                              \
+        cb = Local<Function>::New(Handle<Function>::Cast(args[0]));             \
+      } else if (args[0]->IsBoolean()) {                                        \
+        flag = args[0]->BooleanValue();                                         \
+      }                                                                         \
+    } else {                                                                    \
+      flag = args[0]->BooleanValue();                                           \
+      cb = Local<Function>::New(Handle<Function>::Cast(args[1]));               \
+    }                                                                           \
+                                                                                \
+    TRACE("call %s: flag = %d\n", #Method, flag);                               \
+    if (!obj->db_->Method(flag)) {                                              \
+      result = obj->db_->error().code();                                        \
+    }                                                                           \
+                                                                                \ 
+    Local<Value> argv[1] = {                                                    \
+      Local<Value>::New(Null()),                                                \
+    };                                                                          \
+                                                                                \ 
+    if (result != PolyDB::Error::SUCCESS) {                                     \
+      const char *name = PolyDB::Error::codename(result);                       \
+      Local<String> message = String::NewSymbol(name);                          \
+      Local<Value> err = Exception::Error(message);                             \
+      Local<Object> obj = err->ToObject();                                      \
+      obj->Set(                                                                 \
+        String::NewSymbol("code"), Integer::New(result),                        \
+        static_cast<PropertyAttribute>(ReadOnly | DontDelete)                   \
+      );                                                                        \
+      argv[0] = err;                                                            \
+    }                                                                           \
+                                                                                \ 
+    if (!cb.IsEmpty()) {                                                        \
+      TryCatch try_catch;                                                       \
+      MakeCallback(obj->handle_, cb, 1, argv);                                  \
+      if (try_catch.HasCaught()) {                                              \
+        FatalException(try_catch);                                              \
+      }                                                                         \
+    }                                                                           \ 
+                                                                                \ 
+    return scope.Close(args.This());                                            \
+  }                                                                             \
 
-#define DEFINE_RET_FUNC(Name, Type, REQ_TYPE, INIT_VALUE)                   \
-  Handle<Value> PolyDBWrap::Name(const Arguments &args) {                   \
-    TRACE("%s\n", #Name);                                                   \
-    HandleScope scope;                                                      \
-                                                                            \
-    PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());          \
-    assert(obj != NULL);                                                    \
-                                                                            \
-    if ((args.Length() == 1 && (!args[0]->IsObject())                       \
-                              | !args[0]->IsFunction())) {                  \
-      ThrowException(Exception::TypeError(String::New("Bad argument")));    \
-      return scope.Close(args.This());                                      \
-    }                                                                       \
-                                                                            \
-    REQ_TYPE *req = (REQ_TYPE *)malloc(sizeof(REQ_TYPE));                   \
-    req->type = Type;                                                       \
-    req->result = PolyDB::Error::SUCCESS;                                   \
-    req->wrapdb = obj;                                                      \
-    req->cb.Clear();                                                        \
-    req->ret = INIT_VALUE;                                                  \
-                                                                            \
-    if (args.Length() > 0 && args[0]->IsFunction()) {                       \
-      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0])); \
-    }                                                                       \
-                                                                            \ 
-    uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));             \
-    uv_req->data = req;                                                     \
-                                                                            \
-    int ret = uv_queue_work(uv_default_loop(), uv_req,                      \ 
-                            PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);    \
-    TRACE("uv_queue_work: ret=%d\n", ret);                                  \
-                                                                            \
-    obj->Ref();                                                             \
-    return scope.Close(args.This());                                        \
-  }                                                                         \
+#define DEFINE_RET_FUNC(Name, Type, REQ_TYPE, INIT_VALUE)                           \
+  Handle<Value> PolyDBWrap::Name(const Arguments &args) {                           \
+    HandleScope scope;                                                              \
+    TRACE("%s\n", #Name);                                                           \
+                                                                                    \
+    PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());                  \
+    assert(obj != NULL);                                                            \
+                                                                                    \
+    if ((args.Length() == 1 && (!args[0]->IsObject())                               \
+                              | !args[0]->IsFunction())) {                          \
+      ThrowException(Exception::TypeError(String::New("Bad argument")));            \
+      return scope.Close(args.This());                                              \
+    }                                                                               \
+                                                                                    \
+    REQ_TYPE *req = reinterpret_cast<REQ_TYPE*>(malloc(sizeof(REQ_TYPE)));          \
+    req->type = Type;                                                               \
+    req->result = PolyDB::Error::SUCCESS;                                           \
+    req->wrapdb = obj;                                                              \
+    req->cb.Clear();                                                                \
+    req->ret = INIT_VALUE;                                                          \
+                                                                                    \
+    if (args.Length() > 0 && args[0]->IsFunction()) {                               \
+      req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[0]));         \
+    }                                                                               \
+                                                                                    \ 
+    SendAsyncRequest(req);                                                          \
+                                                                                    \
+    obj->Ref();                                                                     \
+    return scope.Close(args.This());                                                \
+  }                                                                                 \
 
 #define DEFINE_KV_K_ONLY(Name, Type)                                            \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                       \
-    TRACE("%s\n", #Name);                                                       \
     HandleScope scope;                                                          \
+    TRACE("%s\n", #Name);                                                       \
                                                                                 \
     PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());              \
     assert(obj != NULL);                                                        \
@@ -220,7 +210,8 @@ namespace kc = kyotocabinet;
       return scope.Close(args.This());                                          \
     }                                                                           \
                                                                                 \
-    kc_kv_req_t *req = (kc_kv_req_t *)malloc(sizeof(kc_kv_req_t));              \
+    kc_kv_req_t *req =                                                          \
+      reinterpret_cast<kc_kv_req_t*>(malloc(sizeof(kc_kv_req_t)));              \
     req->type = Type;                                                           \
     req->result = PolyDB::Error::SUCCESS;                                       \
     req->wrapdb = obj;                                                          \
@@ -246,13 +237,7 @@ namespace kc = kyotocabinet;
       req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));     \
     }                                                                           \
                                                                                 \ 
-    uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));                 \
-    uv_req->data = req;                                                         \
-    TRACE("uv_work_t = %p\n", uv_req);                                          \
-                                                                                \
-    int ret = uv_queue_work(uv_default_loop(), uv_req,                          \  
-                            PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);        \
-    TRACE("uv_queue_work: ret=%d\n", ret);                                      \
+    SendAsyncRequest(req);                                                      \
                                                                                 \
     obj->Ref();                                                                 \
     return scope.Close(args.This());                                            \
@@ -260,8 +245,8 @@ namespace kc = kyotocabinet;
 
 #define DEFINE_KV_FUNC(Name, Type)                                              \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                       \
-    TRACE("%s\n", #Name);                                                       \
     HandleScope scope;                                                          \
+    TRACE("%s\n", #Name);                                                       \
                                                                                 \
     PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());              \
     assert(obj != NULL);                                                        \
@@ -293,7 +278,8 @@ namespace kc = kyotocabinet;
       return scope.Close(args.This());                                          \
     }                                                                           \
                                                                                 \
-    kc_kv_req_t *req = (kc_kv_req_t *)malloc(sizeof(kc_kv_req_t));              \
+    kc_kv_req_t *req =                                                          \
+      reinterpret_cast<kc_kv_req_t*>(malloc(sizeof(kc_kv_req_t)));              \
     req->type = Type;                                                           \
     req->result = PolyDB::Error::SUCCESS;                                       \
     req->wrapdb = obj;                                                          \
@@ -328,13 +314,7 @@ namespace kc = kyotocabinet;
       req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));     \
     }                                                                           \
                                                                                 \ 
-    uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));                 \
-    uv_req->data = req;                                                         \
-    TRACE("uv_work_t = %p\n", uv_req);                                          \
-                                                                                \
-    int ret = uv_queue_work(uv_default_loop(), uv_req,                          \
-                            PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);        \
-    TRACE("uv_queue_work: ret=%d\n", ret);                                      \
+    SendAsyncRequest(req);                                                      \
                                                                                 \
     obj->Ref();                                                                 \
     return scope.Close(args.This());                                            \
@@ -687,9 +667,22 @@ PolyDB::Cursor* PolyDBWrap::Cursor() {
   return db_->cursor();
 }
 
+void PolyDBWrap::SendAsyncRequest(void *req) {
+  assert(req != NULL);
+
+  uv_work_t *uv_req = reinterpret_cast<uv_work_t*>(malloc(sizeof(uv_work_t)));
+  assert(uv_req != NULL);
+  uv_req->data = req;
+  TRACE("uv_work_t = %p, type = %d\n", uv_req, ((kc_req_t *)req)->type);
+
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  TRACE("uv_queue_work: ret=%d\n", ret);
+}
+
+
 Handle<Value> PolyDBWrap::New(const Arguments &args) {
-  TRACE("New\n");
   HandleScope scope;
+  TRACE("New\n");
 
   PolyDBWrap *obj = new PolyDBWrap();
   obj->Wrap(args.This());
@@ -704,7 +697,7 @@ Handle<Value> PolyDBWrap::Open(const Arguments &args) {
   PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
   assert(obj != NULL);
 
-  kc_open_req_t *open_req = (kc_open_req_t *)malloc(sizeof(kc_open_req_t));
+  kc_open_req_t *open_req = reinterpret_cast<kc_open_req_t*>(malloc(sizeof(kc_open_req_t)));
   open_req->type = KC_OPEN;
   open_req->result = PolyDB::Error::SUCCESS;
   open_req->wrapdb = obj;
@@ -733,11 +726,7 @@ Handle<Value> PolyDBWrap::Open(const Arguments &args) {
     open_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = open_req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(open_req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -760,14 +749,17 @@ Handle<Value> PolyDBWrap::Remove(const Arguments &args) {
   Local<String> key_sym = String::NewSymbol("key");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && 
+                              !args[0]->ToObject()->Get(key_sym)->IsString()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && 
+                              !args[0]->ToObject()->Get(key_sym)->IsString()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_char_cmn_req_t *req = (kc_char_cmn_req_t *)malloc(sizeof(kc_char_cmn_req_t));
+  kc_char_cmn_req_t *req = 
+    reinterpret_cast<kc_char_cmn_req_t*>(malloc(sizeof(kc_char_cmn_req_t)));
   req->type = KC_REMOVE;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -792,11 +784,7 @@ Handle<Value> PolyDBWrap::Remove(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -806,8 +794,8 @@ DEFINE_KV_FUNC(Replace, KC_REPLACE);
 DEFINE_KV_K_ONLY(Seize, KC_SEIZE);
 
 Handle<Value> PolyDBWrap::Increment(const Arguments &args) {
-  TRACE("Increment\n");
   HandleScope scope;
+  TRACE("Increment\n");
 
   PolyDBWrap *obj = ObjectWrap::Unwrap<PolyDBWrap>(args.This());
   assert(obj != NULL);
@@ -817,18 +805,25 @@ Handle<Value> PolyDBWrap::Increment(const Arguments &args) {
   Local<String> orig_sym = String::NewSymbol("orig");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(num_sym) && !args[0]->ToObject()->Get(num_sym)->IsNumber()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(orig_sym) && !args[0]->ToObject()->Get(orig_sym)->IsNumber()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) &&
+                              !args[0]->ToObject()->Get(key_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(num_sym) && 
+                              !args[0]->ToObject()->Get(num_sym)->IsNumber()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(orig_sym) && 
+                              !args[0]->ToObject()->Get(orig_sym)->IsNumber()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(num_sym) && !args[0]->ToObject()->Get(num_sym)->IsNumber()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(orig_sym) && !args[0]->ToObject()->Get(orig_sym)->IsNumber()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && 
+                              !args[0]->ToObject()->Get(key_sym)->IsString()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(num_sym) && 
+                              !args[0]->ToObject()->Get(num_sym)->IsNumber()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(orig_sym) && 
+                              !args[0]->ToObject()->Get(orig_sym)->IsNumber()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_increment_req_t *increment_req = (kc_increment_req_t *)malloc(sizeof(kc_increment_req_t));
+  kc_increment_req_t *increment_req = 
+    reinterpret_cast<kc_increment_req_t*>(malloc(sizeof(kc_increment_req_t)));
   increment_req->type = KC_INCREMENT;
   increment_req->result = PolyDB::Error::SUCCESS;
   increment_req->wrapdb = obj;
@@ -869,7 +864,6 @@ Handle<Value> PolyDBWrap::Increment(const Arguments &args) {
     }
     if (args[0]->ToObject()->Has(orig_sym)) {
       orig = args[0]->ToObject()->Get(orig_sym)->NumberValue();
-      //TRACE("argument orig = %f\n", orig);
       if (kc::chkinf(orig)) {
         increment_req->orig = (orig >= 0 ? kc::INT64MAX : kc::INT64MIN);
       } else {
@@ -879,11 +873,7 @@ Handle<Value> PolyDBWrap::Increment(const Arguments &args) {
     increment_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = increment_req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(increment_req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -901,18 +891,25 @@ Handle<Value> PolyDBWrap::IncrementDouble(const Arguments &args) {
   Local<String> orig_sym = String::NewSymbol("orig");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(num_sym) && !args[0]->ToObject()->Get(num_sym)->IsNumber()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(orig_sym) && !args[0]->ToObject()->Get(orig_sym)->IsNumber()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && 
+                              !args[0]->ToObject()->Get(key_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(num_sym) && 
+                              !args[0]->ToObject()->Get(num_sym)->IsNumber()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(orig_sym) && 
+                              !args[0]->ToObject()->Get(orig_sym)->IsNumber()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(num_sym) && !args[0]->ToObject()->Get(num_sym)->IsNumber()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(orig_sym) && !args[0]->ToObject()->Get(orig_sym)->IsNumber()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && 
+                              !args[0]->ToObject()->Get(key_sym)->IsString()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(num_sym) && 
+                              !args[0]->ToObject()->Get(num_sym)->IsNumber()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(orig_sym) && 
+                              !args[0]->ToObject()->Get(orig_sym)->IsNumber()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_increment_double_req_t *inc_dbl_req = (kc_increment_double_req_t *)malloc(sizeof(kc_increment_double_req_t));
+  kc_increment_double_req_t *inc_dbl_req = 
+    reinterpret_cast<kc_increment_double_req_t*>(malloc(sizeof(kc_increment_double_req_t)));
   inc_dbl_req->type = KC_INCREMENT_DOUBLE;
   inc_dbl_req->result = PolyDB::Error::SUCCESS;
   inc_dbl_req->wrapdb = obj;
@@ -951,11 +948,7 @@ Handle<Value> PolyDBWrap::IncrementDouble(const Arguments &args) {
     inc_dbl_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = inc_dbl_req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(inc_dbl_req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -973,18 +966,24 @@ Handle<Value> PolyDBWrap::Cas(const Arguments &args) {
   Local<String> nval_sym = String::NewSymbol("nval");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(oval_sym) && !args[0]->ToObject()->Get(oval_sym)->IsString()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(nval_sym) && !args[0]->ToObject()->Get(nval_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && 
+                              !args[0]->ToObject()->Get(key_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(oval_sym) && 
+                              !args[0]->ToObject()->Get(oval_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(nval_sym) && 
+                              !args[0]->ToObject()->Get(nval_sym)->IsString()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(oval_sym) && !args[0]->ToObject()->Get(oval_sym)->IsString()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(nval_sym) && !args[0]->ToObject()->Get(nval_sym)->IsString()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && 
+                              !args[0]->ToObject()->Get(key_sym)->IsString()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(oval_sym) && 
+                              !args[0]->ToObject()->Get(oval_sym)->IsString()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(nval_sym) && 
+                              !args[0]->ToObject()->Get(nval_sym)->IsString()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_cas_req_t *cas_req = (kc_cas_req_t *)malloc(sizeof(kc_cas_req_t));
+  kc_cas_req_t *cas_req = reinterpret_cast<kc_cas_req_t*>(malloc(sizeof(kc_cas_req_t)));
   cas_req->type = KC_CAS;
   cas_req->result = PolyDB::Error::SUCCESS;
   cas_req->wrapdb = obj;
@@ -1031,11 +1030,7 @@ Handle<Value> PolyDBWrap::Cas(const Arguments &args) {
     cas_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = cas_req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(cas_req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -1056,14 +1051,17 @@ Handle<Value> PolyDBWrap::Check(const Arguments &args) {
   Local<String> key_sym = String::NewSymbol("key");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && 
+                              !args[0]->ToObject()->Get(key_sym)->IsString()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && 
+                              !args[0]->ToObject()->Get(key_sym)->IsString()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_check_req_t *check_req = (kc_check_req_t *)malloc(sizeof(kc_check_req_t));
+  kc_check_req_t *check_req = 
+    reinterpret_cast<kc_check_req_t*>(malloc(sizeof(kc_check_req_t)));
   check_req->type = KC_CHECK;
   check_req->result = PolyDB::Error::SUCCESS;
   check_req->wrapdb = obj;
@@ -1089,11 +1087,7 @@ Handle<Value> PolyDBWrap::Check(const Arguments &args) {
     check_req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = check_req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(check_req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -1110,16 +1104,21 @@ Handle<Value> PolyDBWrap::GetBulk(const Arguments &args) {
   Local<String> atomic_sym = String::NewSymbol("atomic");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && !args[0]->ToObject()->Get(keys_sym)->IsArray()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && 
+                              !args[0]->ToObject()->Get(keys_sym)->IsArray()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && 
+                              !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && !args[0]->ToObject()->Get(keys_sym)->IsArray()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && 
+                              !args[0]->ToObject()->Get(keys_sym)->IsArray()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && 
+                              !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_get_bulk_req_t *req = (kc_get_bulk_req_t *)malloc(sizeof(kc_get_bulk_req_t));
+  kc_get_bulk_req_t *req = 
+    reinterpret_cast<kc_get_bulk_req_t*>(malloc(sizeof(kc_get_bulk_req_t)));
   req->type = KC_GET_BULK;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1149,11 +1148,7 @@ Handle<Value> PolyDBWrap::GetBulk(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -1170,16 +1165,21 @@ Handle<Value> PolyDBWrap::SetBulk(const Arguments &args) {
   Local<String> atomic_sym = String::NewSymbol("atomic");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(recs_sym) && !args[0]->ToObject()->Get(recs_sym)->IsObject()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(recs_sym) && 
+                              !args[0]->ToObject()->Get(recs_sym)->IsObject()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && 
+                              !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(recs_sym) && !args[0]->ToObject()->Get(recs_sym)->IsObject()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(recs_sym) && 
+                              !args[0]->ToObject()->Get(recs_sym)->IsObject()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && 
+                              !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_set_bulk_req_t *req = (kc_set_bulk_req_t *)malloc(sizeof(kc_set_bulk_req_t));
+  kc_set_bulk_req_t *req = 
+    reinterpret_cast<kc_set_bulk_req_t*>(malloc(sizeof(kc_set_bulk_req_t)));
   req->type = KC_SET_BULK;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1209,11 +1209,7 @@ Handle<Value> PolyDBWrap::SetBulk(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -1230,16 +1226,21 @@ Handle<Value> PolyDBWrap::RemoveBulk(const Arguments &args) {
   Local<String> atomic_sym = String::NewSymbol("atomic");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && !args[0]->ToObject()->Get(keys_sym)->IsArray()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && 
+                              !args[0]->ToObject()->Get(keys_sym)->IsArray()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && 
+                              !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && !args[0]->ToObject()->Get(keys_sym)->IsArray()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && 
+                              !args[0]->ToObject()->Get(keys_sym)->IsArray()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(atomic_sym) && 
+                              !args[0]->ToObject()->Get(atomic_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_remove_bulk_req_t *req = (kc_remove_bulk_req_t *)malloc(sizeof(kc_remove_bulk_req_t));
+  kc_remove_bulk_req_t *req = 
+    reinterpret_cast<kc_remove_bulk_req_t*>(malloc(sizeof(kc_remove_bulk_req_t)));
   req->type = KC_REMOVE_BULK;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1269,11 +1270,7 @@ Handle<Value> PolyDBWrap::RemoveBulk(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -1290,16 +1287,21 @@ Handle<Value> PolyDBWrap::MatchPrefix(const Arguments &args) {
   Local<String> max_sym = String::NewSymbol("max");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(prefix_sym) && !args[0]->ToObject()->Get(prefix_sym)->IsString()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && !args[0]->ToObject()->Get(max_sym)->IsNumber()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(prefix_sym) && 
+                              !args[0]->ToObject()->Get(prefix_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && 
+                              !args[0]->ToObject()->Get(max_sym)->IsNumber()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(prefix_sym) && !args[0]->ToObject()->Get(prefix_sym)->IsString()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && !args[0]->ToObject()->Get(max_sym)->IsNumber()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(prefix_sym) && 
+                              !args[0]->ToObject()->Get(prefix_sym)->IsString()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && 
+                              !args[0]->ToObject()->Get(max_sym)->IsNumber()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_match_cmn_req_t *req = (kc_match_cmn_req_t *)malloc(sizeof(kc_match_cmn_req_t));
+  kc_match_cmn_req_t *req = 
+    reinterpret_cast<kc_match_cmn_req_t*>(malloc(sizeof(kc_match_cmn_req_t)));
   req->type = KC_MATCH_PREFIX;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1331,11 +1333,7 @@ Handle<Value> PolyDBWrap::MatchPrefix(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -1352,16 +1350,21 @@ Handle<Value> PolyDBWrap::MatchRegex(const Arguments &args) {
   Local<String> max_sym = String::NewSymbol("max");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(regex_sym) && !args[0]->ToObject()->Get(regex_sym)->IsRegExp()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && !args[0]->ToObject()->Get(max_sym)->IsNumber()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(regex_sym) && 
+                              !args[0]->ToObject()->Get(regex_sym)->IsRegExp()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && 
+                              !args[0]->ToObject()->Get(max_sym)->IsNumber()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(regex_sym) && !args[0]->ToObject()->Get(regex_sym)->IsRegExp()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && !args[0]->ToObject()->Get(max_sym)->IsNumber()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(regex_sym) && 
+                              !args[0]->ToObject()->Get(regex_sym)->IsRegExp()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && 
+                              !args[0]->ToObject()->Get(max_sym)->IsNumber()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_match_cmn_req_t *req = (kc_match_cmn_req_t *)malloc(sizeof(kc_match_cmn_req_t));
+  kc_match_cmn_req_t *req = 
+    reinterpret_cast<kc_match_cmn_req_t*>(malloc(sizeof(kc_match_cmn_req_t)));
   req->type = KC_MATCH_REGEX;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1393,11 +1396,7 @@ Handle<Value> PolyDBWrap::MatchRegex(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -1416,20 +1415,29 @@ Handle<Value> PolyDBWrap::MatchSimilar(const Arguments &args) {
   Local<String> utf_sym = String::NewSymbol("utf");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(origin_sym) && !args[0]->ToObject()->Get(origin_sym)->IsString()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && !args[0]->ToObject()->Get(max_sym)->IsNumber()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(range_sym) && !args[0]->ToObject()->Get(range_sym)->IsNumber()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(utf_sym) && !args[0]->ToObject()->Get(utf_sym)->IsBoolean()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(origin_sym) && 
+                              !args[0]->ToObject()->Get(origin_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && 
+                              !args[0]->ToObject()->Get(max_sym)->IsNumber()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(range_sym) && 
+                              !args[0]->ToObject()->Get(range_sym)->IsNumber()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(utf_sym) && 
+                              !args[0]->ToObject()->Get(utf_sym)->IsBoolean()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(origin_sym) && !args[0]->ToObject()->Get(origin_sym)->IsString()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && !args[0]->ToObject()->Get(max_sym)->IsNumber()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(range_sym) && !args[0]->ToObject()->Get(range_sym)->IsNumber()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(utf_sym) && !args[0]->ToObject()->Get(utf_sym)->IsBoolean()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(origin_sym) && 
+                              !args[0]->ToObject()->Get(origin_sym)->IsString()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(max_sym) && 
+                              !args[0]->ToObject()->Get(max_sym)->IsNumber()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(range_sym) && 
+                              !args[0]->ToObject()->Get(range_sym)->IsNumber()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(utf_sym) && 
+                              !args[0]->ToObject()->Get(utf_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_match_similar_req_t *req = (kc_match_similar_req_t *)malloc(sizeof(kc_match_similar_req_t));
+  kc_match_similar_req_t *req = 
+    reinterpret_cast<kc_match_similar_req_t*>(malloc(sizeof(kc_match_similar_req_t)));
   req->type = KC_MATCH_SIMILAR;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1475,11 +1483,7 @@ Handle<Value> PolyDBWrap::MatchSimilar(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -1498,16 +1502,21 @@ Handle<Value> PolyDBWrap::Merge(const Arguments &args) {
   Local<String> mode_sym = String::NewSymbol("mode");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(srcary_sym) && !args[0]->ToObject()->Get(srcary_sym)->IsArray()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(mode_sym) && !args[0]->ToObject()->Get(mode_sym)->IsNumber()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(srcary_sym) && 
+                              !args[0]->ToObject()->Get(srcary_sym)->IsArray()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(mode_sym) && 
+                              !args[0]->ToObject()->Get(mode_sym)->IsNumber()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(srcary_sym) && !args[0]->ToObject()->Get(srcary_sym)->IsArray()) || 
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(mode_sym) && !args[0]->ToObject()->Get(mode_sym)->IsNumber()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(srcary_sym) && 
+                              !args[0]->ToObject()->Get(srcary_sym)->IsArray()) || 
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(mode_sym) && 
+                              !args[0]->ToObject()->Get(mode_sym)->IsNumber()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_merge_req_t *req = (kc_merge_req_t *)malloc(sizeof(kc_merge_req_t));
+  kc_merge_req_t *req = 
+    reinterpret_cast<kc_merge_req_t*>(malloc(sizeof(kc_merge_req_t)));
   req->type = KC_MERGE;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1554,11 +1563,7 @@ Handle<Value> PolyDBWrap::Merge(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
   
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -1579,18 +1584,24 @@ Handle<Value> PolyDBWrap::Accept(const Arguments &args) {
   Local<String> writable_sym = String::NewSymbol("writable");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && 
+                              !args[0]->ToObject()->Get(key_sym)->IsString()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && 
+                              !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && 
+                              !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && !args[0]->ToObject()->Get(key_sym)->IsString()) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(key_sym) && 
+                              !args[0]->ToObject()->Get(key_sym)->IsString()) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && 
+                              !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && 
+                              !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_accept_req_t *req = (kc_accept_req_t *)malloc(sizeof(kc_accept_req_t));
+  kc_accept_req_t *req = reinterpret_cast<kc_accept_req_t*>(malloc(sizeof(kc_accept_req_t)));
   req->type = KC_ACCEPT;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1628,11 +1639,7 @@ Handle<Value> PolyDBWrap::Accept(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -1650,18 +1657,25 @@ Handle<Value> PolyDBWrap::AcceptBulk(const Arguments &args) {
   Local<String> writable_sym = String::NewSymbol("writable");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && !args[0]->ToObject()->Get(keys_sym)->IsArray()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && 
+                              !args[0]->ToObject()->Get(keys_sym)->IsArray()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && 
+                              !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && 
+                              !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && !args[0]->ToObject()->Get(keys_sym)->IsArray()) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(keys_sym) && 
+                              !args[0]->ToObject()->Get(keys_sym)->IsArray()) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && 
+                              !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && 
+                              !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_accept_bulk_req_t *req = (kc_accept_bulk_req_t *)malloc(sizeof(kc_accept_bulk_req_t));
+  kc_accept_bulk_req_t *req = 
+    reinterpret_cast<kc_accept_bulk_req_t*>(malloc(sizeof(kc_accept_bulk_req_t)));
   req->type = KC_ACCEPT_BULK;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1697,11 +1711,7 @@ Handle<Value> PolyDBWrap::AcceptBulk(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -1718,16 +1728,20 @@ Handle<Value> PolyDBWrap::Iterate(const Arguments &args) {
   Local<String> writable_sym = String::NewSymbol("writable");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) | !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && 
+                              !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && 
+                              !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(visitor_sym) && 
+                              !args[0]->ToObject()->Get(visitor_sym)->IsObject()) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && 
+                              !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_accept_req_t *req = (kc_accept_req_t *)malloc(sizeof(kc_accept_req_t));
+  kc_accept_req_t *req = reinterpret_cast<kc_accept_req_t*>(malloc(sizeof(kc_accept_req_t)));
   req->type = KC_ITERATE;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1757,11 +1771,7 @@ Handle<Value> PolyDBWrap::Iterate(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -1781,16 +1791,21 @@ Handle<Value> PolyDBWrap::Synchronize(const Arguments &args) {
   Local<String> hard_sym = String::NewSymbol("hard");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) & !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym) && !args[0]->ToObject()->Get(proc_sym)->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(hard_sym) && !args[0]->ToObject()->Get(hard_sym)->IsBoolean()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym) && 
+                              !args[0]->ToObject()->Get(proc_sym)->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(hard_sym) && 
+                              !args[0]->ToObject()->Get(hard_sym)->IsBoolean()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym) && !args[0]->ToObject()->Get(proc_sym)->IsFunction()) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(hard_sym) && !args[0]->ToObject()->Get(hard_sym)->IsBoolean()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym) && 
+                              !args[0]->ToObject()->Get(proc_sym)->IsFunction()) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(hard_sym) && 
+                              !args[0]->ToObject()->Get(hard_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_file_processor_cmn_req_t *req = (kc_file_processor_cmn_req_t *)malloc(sizeof(kc_file_processor_cmn_req_t));
+  kc_file_processor_cmn_req_t *req = 
+    reinterpret_cast<kc_file_processor_cmn_req_t*>(malloc(sizeof(kc_file_processor_cmn_req_t)));
   req->type = KC_SYNCHRONIZE;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1819,11 +1834,7 @@ Handle<Value> PolyDBWrap::Synchronize(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -1840,16 +1851,21 @@ Handle<Value> PolyDBWrap::Occupy(const Arguments &args) {
   Local<String> writable_sym = String::NewSymbol("writable");
   if ( (args.Length() == 0) ||
        (args.Length() == 1 && (!args[0]->IsObject()) & !args[0]->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym) && !args[0]->ToObject()->Get(proc_sym)->IsFunction()) ||
-       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym) && 
+                              !args[0]->ToObject()->Get(proc_sym)->IsFunction()) ||
+       (args.Length() == 1 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && 
+                              !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ||
        (args.Length() == 2 && (!args[0]->IsObject() || !args[1]->IsFunction())) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym) && !args[0]->ToObject()->Get(proc_sym)->IsFunction()) ||
-       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(proc_sym) && 
+                              !args[0]->ToObject()->Get(proc_sym)->IsFunction()) ||
+       (args.Length() == 2 && args[0]->IsObject() && args[0]->ToObject()->Has(writable_sym) && 
+                              !args[0]->ToObject()->Get(writable_sym)->IsBoolean()) ) {
     ThrowException(Exception::TypeError(String::New("Bad argument")));
     return scope.Close(args.This());
   }
 
-  kc_file_processor_cmn_req_t *req = (kc_file_processor_cmn_req_t *)malloc(sizeof(kc_file_processor_cmn_req_t));
+  kc_file_processor_cmn_req_t *req = 
+    reinterpret_cast<kc_file_processor_cmn_req_t*>(malloc(sizeof(kc_file_processor_cmn_req_t)));
   req->type = KC_OCCUPY;
   req->result = PolyDB::Error::SUCCESS;
   req->wrapdb = obj;
@@ -1878,11 +1894,7 @@ Handle<Value> PolyDBWrap::Occupy(const Arguments &args) {
     req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
   }
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
-  uv_req->data = req;
-
-  int ret = uv_queue_work(uv_default_loop(), uv_req, PolyDBWrap::OnWork, PolyDBWrap::OnWorkDone);
-  TRACE("uv_queue_work: ret=%d\n", ret);
+  SendAsyncRequest(req);
 
   obj->Ref();
   return scope.Close(args.This());
@@ -2220,7 +2232,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     Local<String> message = String::NewSymbol(name);
     Local<Value> err = Exception::Error(message);
     Local<Object> obj = err->ToObject();
-    obj->Set(String::NewSymbol("code"), Integer::New(req->result), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
+    DEFINE_JS_CONSTANT(obj, "code", req->result);
     argv[argc] = err;
   }
   argc++;
@@ -2230,7 +2242,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_GET:
     case KC_SEIZE:
       {
-        kc_kv_req_t *kv_req = static_cast<kc_kv_req_t *>(work_req->data);
+        kc_kv_req_t *kv_req = reinterpret_cast<kc_kv_req_t*>(work_req->data);
         if (kv_req->value) {
           argv[argc++] = String::New(kv_req->value, strlen(kv_req->value));
         }
@@ -2239,7 +2251,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_INCREMENT:
       {
         if (req->result == PolyDB::Error::SUCCESS) {
-          kc_increment_req_t *inc_req = static_cast<kc_increment_req_t *>(work_req->data);
+          kc_increment_req_t *inc_req = reinterpret_cast<kc_increment_req_t*>(work_req->data);
           TRACE("increment->num = %lld\n", inc_req->num);
           argv[argc++] = Integer::New(inc_req->num);
         }
@@ -2248,7 +2260,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_INCREMENT_DOUBLE:
       {
         if (req->result == PolyDB::Error::SUCCESS) {
-          kc_increment_double_req_t *inc_dbl_req = static_cast<kc_increment_double_req_t *>(work_req->data);
+          kc_increment_double_req_t *inc_dbl_req = reinterpret_cast<kc_increment_double_req_t*>(work_req->data);
           TRACE("increment_double->num = %f\n", inc_dbl_req->num);
           argv[argc++] = Number::New(inc_dbl_req->num);
         }
@@ -2257,14 +2269,14 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_COUNT:
     case KC_SIZE:
       {
-        kc_ret_req_t *ret_req = static_cast<kc_ret_req_t*>(work_req->data);
+        kc_ret_req_t *ret_req = reinterpret_cast<kc_ret_req_t*>(work_req->data);
         argv[argc++] = Number::New(ret_req->ret);
         break;
       }
     case KC_PATH:
       {
         if (req->result == PolyDB::Error::SUCCESS) {
-          kc_char_ret_req_t *char_ret_req = static_cast<kc_char_ret_req_t*>(work_req->data);
+          kc_char_ret_req_t *char_ret_req = reinterpret_cast<kc_char_ret_req_t*>(work_req->data);
           argv[argc++] = String::New(char_ret_req->ret);
         }
         break;
@@ -2272,34 +2284,34 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_STATUS:
       {
         if (req->result == PolyDB::Error::SUCCESS) {
-          kc_strmap_ret_req_t *strmap_ret_req = static_cast<kc_strmap_ret_req_t*>(work_req->data);
+          kc_strmap_ret_req_t *strmap_ret_req = reinterpret_cast<kc_strmap_ret_req_t*>(work_req->data);
           argv[argc++] = Map2Obj(strmap_ret_req->ret);
         }
         break;
       }
     case KC_CHECK:
       {
-        kc_check_req_t *check_req = static_cast<kc_check_req_t*>(work_req->data);
+        kc_check_req_t *check_req = reinterpret_cast<kc_check_req_t*>(work_req->data);
         argv[argc++] = Number::New(check_req->ret);
         break;
       }
     case KC_GET_BULK:
       {
         if (req->result == PolyDB::Error::SUCCESS) {
-          kc_get_bulk_req_t *gb_req = static_cast<kc_get_bulk_req_t*>(work_req->data);
+          kc_get_bulk_req_t *gb_req = reinterpret_cast<kc_get_bulk_req_t*>(work_req->data);
           argv[argc++] = Map2Obj(gb_req->recs);
         }
         break;
       }
     case KC_SET_BULK:
       {
-        kc_set_bulk_req_t *sb_req = static_cast<kc_set_bulk_req_t*>(work_req->data);
+        kc_set_bulk_req_t *sb_req = reinterpret_cast<kc_set_bulk_req_t*>(work_req->data);
         argv[argc++] = Number::New(sb_req->num);
         break;
       }
     case KC_REMOVE_BULK:
       {
-        kc_remove_bulk_req_t *rb_req = static_cast<kc_remove_bulk_req_t*>(work_req->data);
+        kc_remove_bulk_req_t *rb_req = reinterpret_cast<kc_remove_bulk_req_t*>(work_req->data);
         argv[argc++] = Number::New(rb_req->num);
         break;
       }
@@ -2307,7 +2319,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_MATCH_REGEX:
       {
         if (req->result == PolyDB::Error::SUCCESS) {
-          kc_match_cmn_req_t *m_req = static_cast<kc_match_cmn_req_t*>(work_req->data);
+          kc_match_cmn_req_t *m_req = reinterpret_cast<kc_match_cmn_req_t*>(work_req->data);
           argv[argc++] = Vector2Array(m_req->keys);
         }
         break;
@@ -2315,7 +2327,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_MATCH_SIMILAR:
       {
         if (req->result == PolyDB::Error::SUCCESS) {
-          kc_match_similar_req_t *ms_req = static_cast<kc_match_similar_req_t*>(work_req->data);
+          kc_match_similar_req_t *ms_req = reinterpret_cast<kc_match_similar_req_t*>(work_req->data);
           argv[argc++] = Vector2Array(ms_req->keys);
         }
         break;
@@ -2327,8 +2339,6 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
   // execute callback
   if (!req->cb.IsEmpty()) {
     TryCatch try_catch;
-    //req->cb->Call(Context::GetCurrent()->Global(), 1, argv);
-    //TRACE("calling callback %d %p \n", req->type, work_req);
     MakeCallback(wrapdb->handle_, req->cb, argc, argv);
     if (try_catch.HasCaught()) {
       FatalException(try_catch);
@@ -2345,7 +2355,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
   switch (req->type) {
     case KC_OPEN:
       {
-        kc_open_req_t *open_req = static_cast<kc_open_req_t*>(work_req->data);
+        kc_open_req_t *open_req = reinterpret_cast<kc_open_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(open_req, path);
         free(open_req);
         break;
@@ -2355,20 +2365,20 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_COUNT:
     case KC_SIZE:
       {
-        kc_req_t *base_req = static_cast<kc_req_t*>(work_req->data);
+        kc_req_t *base_req = reinterpret_cast<kc_req_t*>(work_req->data);
         free(base_req);
         break;
       }
     case KC_STATUS:
       {
-        kc_strmap_ret_req_t *strmap_ret_req = static_cast<kc_strmap_ret_req_t*>(work_req->data);
+        kc_strmap_ret_req_t *strmap_ret_req = reinterpret_cast<kc_strmap_ret_req_t*>(work_req->data);
         SAFE_REQ_ATTR_DELETE(strmap_ret_req, ret);
         free(strmap_ret_req);
         break;
       }
     case KC_PATH:
       { 
-        kc_char_ret_req_t *ret_req = static_cast<kc_char_ret_req_t*>(work_req->data);
+        kc_char_ret_req_t *ret_req = reinterpret_cast<kc_char_ret_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(ret_req, ret);
         free(ret_req);
         break;
@@ -2380,7 +2390,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_REPLACE:
     case KC_SEIZE:
       {
-        kc_kv_req_t *kv_req = static_cast<kc_kv_req_t*>(work_req->data);
+        kc_kv_req_t *kv_req = reinterpret_cast<kc_kv_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(kv_req, key);
         SAFE_REQ_ATTR_FREE(kv_req, value);
         free(kv_req);
@@ -2388,21 +2398,21 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       }
     case KC_INCREMENT:
       { 
-        kc_increment_req_t *inc_req = static_cast<kc_increment_req_t*>(work_req->data);
+        kc_increment_req_t *inc_req = reinterpret_cast<kc_increment_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(inc_req, key);
         free(inc_req);
         break;
       }
     case KC_INCREMENT_DOUBLE:
       { 
-        kc_increment_double_req_t *inc_dbl_req = static_cast<kc_increment_double_req_t*>(work_req->data);
+        kc_increment_double_req_t *inc_dbl_req = reinterpret_cast<kc_increment_double_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(inc_dbl_req, key);
         free(inc_dbl_req);
         break;
       }
     case KC_CAS:
       {
-        kc_cas_req_t *cas_req = static_cast<kc_cas_req_t *>(work_req->data);
+        kc_cas_req_t *cas_req = reinterpret_cast<kc_cas_req_t *>(work_req->data);
         SAFE_REQ_ATTR_FREE(cas_req, key);
         SAFE_REQ_ATTR_FREE(cas_req, oval);
         SAFE_REQ_ATTR_FREE(cas_req, nval);
@@ -2411,14 +2421,14 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       }
     case KC_CHECK:
       { 
-        kc_check_req_t *check_req = static_cast<kc_check_req_t*>(work_req->data);
+        kc_check_req_t *check_req = reinterpret_cast<kc_check_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(check_req, key);
         free(check_req);
         break;
       }
     case KC_GET_BULK:
       {
-        kc_get_bulk_req_t *gb_req = static_cast<kc_get_bulk_req_t*>(work_req->data);
+        kc_get_bulk_req_t *gb_req = reinterpret_cast<kc_get_bulk_req_t*>(work_req->data);
         SAFE_REQ_ATTR_DELETE(gb_req, keys);
         SAFE_REQ_ATTR_DELETE(gb_req, recs);
         free(gb_req);
@@ -2426,14 +2436,14 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       }
     case KC_SET_BULK:
       {
-        kc_set_bulk_req_t *sb_req = static_cast<kc_set_bulk_req_t*>(work_req->data);
+        kc_set_bulk_req_t *sb_req = reinterpret_cast<kc_set_bulk_req_t*>(work_req->data);
         SAFE_REQ_ATTR_DELETE(sb_req, recs);
         free(sb_req);
         break;
       }
     case KC_REMOVE_BULK:
       {
-        kc_remove_bulk_req_t *rb_req = static_cast<kc_remove_bulk_req_t*>(work_req->data);
+        kc_remove_bulk_req_t *rb_req = reinterpret_cast<kc_remove_bulk_req_t*>(work_req->data);
         SAFE_REQ_ATTR_DELETE(rb_req, keys);
         free(rb_req);
         break;
@@ -2441,7 +2451,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_MATCH_PREFIX:
     case KC_MATCH_REGEX:
       {
-        kc_match_cmn_req_t *m_req = static_cast<kc_match_cmn_req_t*>(work_req->data);
+        kc_match_cmn_req_t *m_req = reinterpret_cast<kc_match_cmn_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(m_req, str);
         SAFE_REQ_ATTR_DELETE(m_req, keys);
         free(m_req);
@@ -2449,7 +2459,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       }
     case KC_MATCH_SIMILAR:
       {
-        kc_match_similar_req_t *ms_req = static_cast<kc_match_similar_req_t*>(work_req->data);
+        kc_match_similar_req_t *ms_req = reinterpret_cast<kc_match_similar_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(ms_req, str);
         SAFE_REQ_ATTR_DELETE(ms_req, keys);
         free(ms_req);
@@ -2457,7 +2467,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       }
     case KC_MERGE:
       {
-        kc_merge_req_t *merge_req = static_cast<kc_merge_req_t*>(work_req->data);
+        kc_merge_req_t *merge_req = reinterpret_cast<kc_merge_req_t*>(work_req->data);
         if (merge_req->srcary) {
           delete[] merge_req->srcary;
           merge_req->srcary = NULL;
@@ -2470,14 +2480,14 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_DUMP_SNAPSHOT:
     case KC_LOAD_SNAPSHOT:
       {
-        kc_char_cmn_req_t *path_req = static_cast<kc_char_cmn_req_t*>(work_req->data);
+        kc_char_cmn_req_t *path_req = reinterpret_cast<kc_char_cmn_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(path_req, str);
         free(path_req);
         break;
       }
     case KC_ACCEPT:
       {
-        kc_accept_req_t *accept_req = static_cast<kc_accept_req_t*>(work_req->data);
+        kc_accept_req_t *accept_req = reinterpret_cast<kc_accept_req_t*>(work_req->data);
         SAFE_REQ_ATTR_FREE(accept_req, key);
         accept_req->visitor.Dispose();
         free(accept_req);
@@ -2485,7 +2495,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       }
     case KC_ACCEPT_BULK:
       {
-        kc_accept_bulk_req_t *accept_req = static_cast<kc_accept_bulk_req_t*>(work_req->data);
+        kc_accept_bulk_req_t *accept_req = reinterpret_cast<kc_accept_bulk_req_t*>(work_req->data);
         SAFE_REQ_ATTR_DELETE(accept_req, keys);
         accept_req->visitor.Dispose();
         free(accept_req);
@@ -2493,7 +2503,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
       }
     case KC_ITERATE:
       {
-        kc_accept_req_t *ite_req = static_cast<kc_accept_req_t*>(work_req->data);
+        kc_accept_req_t *ite_req = reinterpret_cast<kc_accept_req_t*>(work_req->data);
         ite_req->visitor.Dispose();
         free(ite_req);
         break;
@@ -2510,7 +2520,7 @@ void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
     case KC_SYNCHRONIZE:
     case KC_OCCUPY:
       {
-        kc_file_processor_cmn_req_t *fproc_req = static_cast<kc_file_processor_cmn_req_t*>(work_req->data);
+        kc_file_processor_cmn_req_t *fproc_req = reinterpret_cast<kc_file_processor_cmn_req_t*>(work_req->data);
         fproc_req->proc.Dispose();
         free(fproc_req);
         break;
@@ -2535,65 +2545,67 @@ void PolyDBWrap::Init(Handle<Object> target) {
 
   // prototype
   Local<ObjectTemplate> prottpl = tpl->PrototypeTemplate();
-  prottpl->Set(String::NewSymbol("open"), FunctionTemplate::New(Open)->GetFunction());
-  prottpl->Set(String::NewSymbol("close"), FunctionTemplate::New(Close)->GetFunction());
-  prottpl->Set(String::NewSymbol("set"), FunctionTemplate::New(Set)->GetFunction());
-  prottpl->Set(String::NewSymbol("get"), FunctionTemplate::New(Get)->GetFunction());
-  prottpl->Set(String::NewSymbol("clear"), FunctionTemplate::New(Clear)->GetFunction());
-  prottpl->Set(String::NewSymbol("add"), FunctionTemplate::New(Add)->GetFunction());
-  prottpl->Set(String::NewSymbol("append"), FunctionTemplate::New(Append)->GetFunction());
-  prottpl->Set(String::NewSymbol("remove"), FunctionTemplate::New(Remove)->GetFunction());
-  prottpl->Set(String::NewSymbol("replace"), FunctionTemplate::New(Replace)->GetFunction());
-  prottpl->Set(String::NewSymbol("seize"), FunctionTemplate::New(Seize)->GetFunction());
-  prottpl->Set(String::NewSymbol("increment"), FunctionTemplate::New(Increment)->GetFunction());
-  prottpl->Set(String::NewSymbol("increment_double"), FunctionTemplate::New(IncrementDouble)->GetFunction());
-  prottpl->Set(String::NewSymbol("cas"), FunctionTemplate::New(Cas)->GetFunction());
-  prottpl->Set(String::NewSymbol("count"), FunctionTemplate::New(Count)->GetFunction());
-  prottpl->Set(String::NewSymbol("size"), FunctionTemplate::New(Size)->GetFunction());
-  prottpl->Set(String::NewSymbol("path"), FunctionTemplate::New(Path)->GetFunction());
-  prottpl->Set(String::NewSymbol("status"), FunctionTemplate::New(Status)->GetFunction());
-  prottpl->Set(String::NewSymbol("check"), FunctionTemplate::New(Check)->GetFunction());
-  prottpl->Set(String::NewSymbol("get_bulk"), FunctionTemplate::New(GetBulk)->GetFunction());
-  prottpl->Set(String::NewSymbol("set_bulk"), FunctionTemplate::New(SetBulk)->GetFunction());
-  prottpl->Set(String::NewSymbol("remove_bulk"), FunctionTemplate::New(RemoveBulk)->GetFunction());
-  prottpl->Set(String::NewSymbol("match_prefix"), FunctionTemplate::New(MatchPrefix)->GetFunction());
-  prottpl->Set(String::NewSymbol("match_regex"), FunctionTemplate::New(MatchRegex)->GetFunction());
-  prottpl->Set(String::NewSymbol("match_similar"), FunctionTemplate::New(MatchSimilar)->GetFunction());
-  prottpl->Set(String::NewSymbol("copy"), FunctionTemplate::New(Copy)->GetFunction());
-  prottpl->Set(String::NewSymbol("merge"), FunctionTemplate::New(Merge)->GetFunction());
-  prottpl->Set(String::NewSymbol("dump_snapshot"), FunctionTemplate::New(DumpSnapshot)->GetFunction());
-  prottpl->Set(String::NewSymbol("load_snapshot"), FunctionTemplate::New(LoadSnapshot)->GetFunction());
-  prottpl->Set(String::NewSymbol("accept"), FunctionTemplate::New(Accept)->GetFunction());
-  prottpl->Set(String::NewSymbol("accept_bulk"), FunctionTemplate::New(AcceptBulk)->GetFunction());
-  prottpl->Set(String::NewSymbol("iterate"), FunctionTemplate::New(Iterate)->GetFunction());
-  prottpl->Set(String::NewSymbol("begin_transaction"), FunctionTemplate::New(BeginTransaction)->GetFunction());
-  prottpl->Set(String::NewSymbol("end_transaction"), FunctionTemplate::New(EndTransaction)->GetFunction());
-  prottpl->Set(String::NewSymbol("synchronize"), FunctionTemplate::New(Synchronize)->GetFunction());
-  prottpl->Set(String::NewSymbol("occupy"), FunctionTemplate::New(Occupy)->GetFunction());
+  DEFINE_JS_METHOD(prottpl, "open", Open);
+  DEFINE_JS_METHOD(prottpl, "close", Close);
+  DEFINE_JS_METHOD(prottpl, "set", Set);
+  DEFINE_JS_METHOD(prottpl, "get", Get);
+  DEFINE_JS_METHOD(prottpl, "clear", Clear);
+  DEFINE_JS_METHOD(prottpl, "add", Add);
+  DEFINE_JS_METHOD(prottpl, "append", Append);
+  DEFINE_JS_METHOD(prottpl, "remove", Remove);
+  DEFINE_JS_METHOD(prottpl, "replace", Replace);
+  DEFINE_JS_METHOD(prottpl, "seize", Seize);
+  DEFINE_JS_METHOD(prottpl, "increment", Increment);
+  DEFINE_JS_METHOD(prottpl, "increment_double", IncrementDouble);
+  DEFINE_JS_METHOD(prottpl, "cas", Cas);
+  DEFINE_JS_METHOD(prottpl, "count", Count);
+  DEFINE_JS_METHOD(prottpl, "size", Size);
+  DEFINE_JS_METHOD(prottpl, "path", Path);
+  DEFINE_JS_METHOD(prottpl, "status", Status);
+  DEFINE_JS_METHOD(prottpl, "check", Check);
+  DEFINE_JS_METHOD(prottpl, "get_bulk", GetBulk);
+  DEFINE_JS_METHOD(prottpl, "set_bulk", SetBulk);
+  DEFINE_JS_METHOD(prottpl, "remove_bulk", RemoveBulk);
+  DEFINE_JS_METHOD(prottpl, "match_prefix", MatchPrefix);
+  DEFINE_JS_METHOD(prottpl, "match_regex", MatchRegex);
+  DEFINE_JS_METHOD(prottpl, "match_similar", MatchSimilar);
+  DEFINE_JS_METHOD(prottpl, "copy", Copy);
+  DEFINE_JS_METHOD(prottpl, "merge", Merge);
+  DEFINE_JS_METHOD(prottpl, "dump_snapshot", DumpSnapshot);
+  DEFINE_JS_METHOD(prottpl, "load_snapshot", LoadSnapshot);
+  DEFINE_JS_METHOD(prottpl, "accept", Accept);
+  DEFINE_JS_METHOD(prottpl, "accept_bulk", AcceptBulk);
+  DEFINE_JS_METHOD(prottpl, "iterate", Iterate);
+  DEFINE_JS_METHOD(prottpl, "begin_transaction", BeginTransaction);
+  DEFINE_JS_METHOD(prottpl, "end_transaction", EndTransaction);
+  DEFINE_JS_METHOD(prottpl, "synchronize", Synchronize);
+  DEFINE_JS_METHOD(prottpl, "occupy", Occupy);
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("DB"), ctor);
 
   // define OpenMode
-  ctor->Set(String::NewSymbol("OREADER"), Integer::New(PolyDB::OREADER), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("OWRITER"), Integer::New(PolyDB::OWRITER), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("OCREATE"), Integer::New(PolyDB::OCREATE), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("OTRUNCATE"), Integer::New(PolyDB::OTRUNCATE), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("OAUTOTRAN"), Integer::New(PolyDB::OAUTOTRAN), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("OAUTOSYNC"), Integer::New(PolyDB::OAUTOSYNC), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("ONOLOCK"), Integer::New(PolyDB::ONOLOCK), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("OTRYLOCK"), Integer::New(PolyDB::OTRYLOCK), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("ONOREPAIR"), Integer::New(PolyDB::ONOREPAIR), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
+  DEFINE_JS_CONSTANT(ctor, "OREADER", PolyDB::OREADER);
+  DEFINE_JS_CONSTANT(ctor, "OWRITER", PolyDB::OWRITER);
+  DEFINE_JS_CONSTANT(ctor, "OCREATE", PolyDB::OCREATE);
+  DEFINE_JS_CONSTANT(ctor, "OTRUNCATE", PolyDB::OTRUNCATE);
+  DEFINE_JS_CONSTANT(ctor, "OAUTOTRAN", PolyDB::OAUTOTRAN);
+  DEFINE_JS_CONSTANT(ctor, "OAUTOSYNC", PolyDB::OAUTOSYNC);
+  DEFINE_JS_CONSTANT(ctor, "ONOLOCK", PolyDB::ONOLOCK);
+  DEFINE_JS_CONSTANT(ctor, "OTRYLOCK", PolyDB::OTRYLOCK);
+  DEFINE_JS_CONSTANT(ctor, "ONOREPAIR", PolyDB::ONOREPAIR);
+
   // define MergeMode
-  ctor->Set(String::NewSymbol("MSET"), Integer::New(PolyDB::MSET), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("MADD"), Integer::New(PolyDB::MADD), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("MREPLACE"), Integer::New(PolyDB::MREPLACE), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("MAPPEND"), Integer::New(PolyDB::MAPPEND), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  // define MapReduce Option
-  ctor->Set(String::NewSymbol("XNOLOCK"), Integer::New(MapReduce::XNOLOCK), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("XPARAMAP"), Integer::New(MapReduce::XPARAMAP), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("XPARARED"), Integer::New(MapReduce::XPARARED), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("XPARAFLS"), Integer::New(MapReduce::XPARAFLS), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
-  ctor->Set(String::NewSymbol("XNOCOMP"), Integer::New(MapReduce::XNOCOMP), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
+  DEFINE_JS_CONSTANT(ctor, "MSET", PolyDB::MSET);
+  DEFINE_JS_CONSTANT(ctor, "MADD", PolyDB::MADD);
+  DEFINE_JS_CONSTANT(ctor, "MREPLACE", PolyDB::MREPLACE);
+  DEFINE_JS_CONSTANT(ctor, "MAPPEND", PolyDB::MAPPEND);
+
+  // define MapReduceMode
+  DEFINE_JS_CONSTANT(ctor, "XNOLOCK", MapReduce::XNOLOCK);
+  DEFINE_JS_CONSTANT(ctor, "XPARAMAP", MapReduce::XPARAMAP);
+  DEFINE_JS_CONSTANT(ctor, "XPARARED", MapReduce::XPARARED);
+  DEFINE_JS_CONSTANT(ctor, "XPARAFLS", MapReduce::XPARAFLS);
+  DEFINE_JS_CONSTANT(ctor, "XNOCOMP",  MapReduce::XNOCOMP);
 }
 

@@ -104,8 +104,10 @@ MapReduceWrap::MapReduceWrap(
     dbnum_(dbnum), clim_(clim), cbnum_(cbnum) {
   TRACE("arguments: dbnum_ = %d, clim_ = %lld, cbnum_ = %lld\n", dbnum_, clim_, cbnum_);
   TRACE(
-    "arguments empty state: map_ = %d, reduce_ = %d, log_ = %d, pre_ = %d, mid_ = %d, post_ = %d\n", 
-    map_.IsEmpty(), reduce_.IsEmpty(), log_.IsEmpty(), pre_.IsEmpty(), mid_.IsEmpty(), post_.IsEmpty()
+    "arguments empty state: map_ = %d, reduce_ = %d, log_ = %d, "
+    "pre_ = %d, mid_ = %d, post_ = %d\n", 
+    map_.IsEmpty(), reduce_.IsEmpty(), log_.IsEmpty(), 
+    pre_.IsEmpty(), mid_.IsEmpty(), post_.IsEmpty()
   );
 
   emit_.Clear();
@@ -117,9 +119,10 @@ MapReduceWrap::MapReduceWrap(
 
 MapReduceWrap::~MapReduceWrap() {
   TRACE(
-    "arguments empty state: map_ = %d, reduce_ = %d, log_ = %d, pre_ = %d, mid_ = %d, post_ = %d\n", 
-
-    map_.IsEmpty(), reduce_.IsEmpty(), log_.IsEmpty(), pre_.IsEmpty(), mid_.IsEmpty(), post_.IsEmpty()
+    "arguments empty state: map_ = %d, reduce_ = %d, log_ = %d, "
+    "pre_ = %d, mid_ = %d, post_ = %d\n", 
+    map_.IsEmpty(), reduce_.IsEmpty(), log_.IsEmpty(), 
+    pre_.IsEmpty(), mid_.IsEmpty(), post_.IsEmpty()
   );
   TRACE("this: %p\n", this);
 
@@ -137,7 +140,9 @@ bool MapReduceWrap::map(const char *kbuf, size_t ksiz, const char *vbuf, size_t 
   TRACE("lock ...\n");
   pthread_mutex_lock(&async_mapreduce_mtx);
 
-  kc_async_mapreduce_req_t *req = (kc_async_mapreduce_req_t *)malloc(sizeof(kc_async_mapreduce_req_t));
+  kc_async_mapreduce_req_t *req = 
+    reinterpret_cast<kc_async_mapreduce_req_t*>(malloc(sizeof(kc_async_mapreduce_req_t)));
+  assert(req != NULL);
   req->cb = map_;
   req->done.set(0);
   req->type = KC_ASYNC_MAPREDUCE_MAP;
@@ -168,7 +173,9 @@ bool MapReduceWrap::reduce(const char *kbuf, size_t ksiz, MapReduce::ValueIterat
   TRACE("lock ...\n");
   pthread_mutex_lock(&async_mapreduce_mtx);
 
-  kc_async_mapreduce_req_t *req = (kc_async_mapreduce_req_t *)malloc(sizeof(kc_async_mapreduce_req_t));
+  kc_async_mapreduce_req_t *req = 
+    reinterpret_cast<kc_async_mapreduce_req_t*>(malloc(sizeof(kc_async_mapreduce_req_t)));
+  assert(req != NULL);
   req->cb = reduce_;
   req->done.set(0);
   req->type = KC_ASYNC_MAPREDUCE_REDUCE;
@@ -205,7 +212,9 @@ bool MapReduceWrap::log(const char *name, const char *message) {
     return true;
   }
 
-  kc_async_mapreduce_req_t *req = (kc_async_mapreduce_req_t *)malloc(sizeof(kc_async_mapreduce_req_t));
+  kc_async_mapreduce_req_t *req = 
+    reinterpret_cast<kc_async_mapreduce_req_t*>(malloc(sizeof(kc_async_mapreduce_req_t)));
+  assert(req != NULL);
   req->cb = log_;
   req->done.set(0);
   req->type = KC_ASYNC_MAPREDUCE_LOG;
@@ -238,7 +247,9 @@ bool MapReduceWrap::preprocess() {
     return true;
   }
 
-  kc_async_mapreduce_req_t *req = (kc_async_mapreduce_req_t *)malloc(sizeof(kc_async_mapreduce_req_t));
+  kc_async_mapreduce_req_t *req = 
+    reinterpret_cast<kc_async_mapreduce_req_t*>(malloc(sizeof(kc_async_mapreduce_req_t)));
+  assert(req != NULL);
   req->cb = pre_;
   req->done.set(0);
   req->type = KC_ASYNC_MAPREDUCE_PRE;
@@ -270,7 +281,9 @@ bool MapReduceWrap::midprocess() {
     return true;
   }
 
-  kc_async_mapreduce_req_t *req = (kc_async_mapreduce_req_t *)malloc(sizeof(kc_async_mapreduce_req_t));
+  kc_async_mapreduce_req_t *req = 
+    reinterpret_cast<kc_async_mapreduce_req_t*>(malloc(sizeof(kc_async_mapreduce_req_t)));
+  assert(req != NULL);
   req->cb = mid_;
   req->done.set(0);
   req->type = KC_ASYNC_MAPREDUCE_MID;
@@ -302,7 +315,9 @@ bool MapReduceWrap::postprocess() {
     return true;
   }
 
-  kc_async_mapreduce_req_t *req = (kc_async_mapreduce_req_t *)malloc(sizeof(kc_async_mapreduce_req_t));
+  kc_async_mapreduce_req_t *req = 
+    reinterpret_cast<kc_async_mapreduce_req_t*>(malloc(sizeof(kc_async_mapreduce_req_t)));
+  assert(req != NULL);
   req->cb = post_;
   req->done.set(0);
   req->type = KC_ASYNC_MAPREDUCE_POST;
@@ -429,7 +444,9 @@ Handle<Value> MapReduceWrap::Execute(const Arguments &args) {
 
   Local<String> ctor_sym = String::NewSymbol("constructor");
   Local<String> name_sym = String::NewSymbol("name");
-  String::Utf8Value ctorName(args[0]->ToObject()->Get(ctor_sym)->ToObject()->Get(name_sym)->ToString());
+  String::Utf8Value ctorName(
+    args[0]->ToObject()->Get(ctor_sym)->ToObject()->Get(name_sym)->ToString()
+  );
   if (strcmp("DB", *ctorName)) {
     ThrowException(Exception::TypeError(String::New("Invalid parameter")));
     return scope.Close(args.This());
@@ -438,7 +455,9 @@ Handle<Value> MapReduceWrap::Execute(const Arguments &args) {
 
   Local<String> emit_sym = String::NewSymbol("emit");
   Local<String> iter_sym = String::NewSymbol("iter");
-  kc_mapreduce_req_t *req = (kc_mapreduce_req_t*)malloc(sizeof(kc_mapreduce_req_t));
+  kc_mapreduce_req_t *req = 
+    reinterpret_cast<kc_mapreduce_req_t*>(malloc(sizeof(kc_mapreduce_req_t)));
+  assert(req != NULL);
   req->wrapmapreduce = wrapMapReduce;
   req->type = KC_MAPREDUCE_EXECUTE;
   req->result = PolyDB::Error::SUCCESS;
@@ -447,8 +466,12 @@ Handle<Value> MapReduceWrap::Execute(const Arguments &args) {
   req->wrapdb->Ref();
   req->tmppath = NULL;
   req->opts = 0;
-  req->wrapmapreduce->emit_ = Persistent<Function>::New(Handle<Function>::Cast(args.This()->ToObject()->Get(emit_sym)));
-  req->wrapmapreduce->iter_ = Persistent<Function>::New(Handle<Function>::Cast(args.This()->ToObject()->Get(iter_sym)));
+  req->wrapmapreduce->emit_ = Persistent<Function>::New(
+    Handle<Function>::Cast(args.This()->ToObject()->Get(emit_sym))
+  );
+  req->wrapmapreduce->iter_ = Persistent<Function>::New(
+    Handle<Function>::Cast(args.This()->ToObject()->Get(iter_sym))
+  );
 
   int32_t cb_index = 0;
   if (args.Length() == 2) {
@@ -465,7 +488,8 @@ Handle<Value> MapReduceWrap::Execute(const Arguments &args) {
   }
   req->cb = Persistent<Function>::New(Handle<Function>::Cast(args[cb_index]));
 
-  uv_work_t *uv_req = (uv_work_t *)malloc(sizeof(uv_work_t));
+  uv_work_t *uv_req = reinterpret_cast<uv_work_t*>(malloc(sizeof(uv_work_t)));
+  assert(uv_req != NULL);
   uv_req->data = req;
   TRACE("uv_work_t = %p, type = %d\n", uv_req, req->type);
 
@@ -526,7 +550,7 @@ void MapReduceWrap::OnWorkDone(uv_work_t *work_req) {
     Local<String> message = String::NewSymbol(name);
     Local<Value> err = Exception::Error(message);
     Local<Object> obj = err->ToObject();
-    obj->Set(String::NewSymbol("code"), Integer::New(req->result), static_cast<PropertyAttribute>(ReadOnly | DontDelete));
+    DEFINE_JS_CONSTANT(obj, "code", req->result);
     argv[argc] = err;
   }
   argc++;
@@ -573,8 +597,8 @@ void MapReduceWrap::OnWorkDone(uv_work_t *work_req) {
   }
 
   req->wrapmapreduce = NULL;
-
   work_req->data = NULL;
+
   free(work_req);
 }
 
@@ -685,9 +709,9 @@ void MapReduceWrap::Init(Handle<Object> target) {
 
   // prototype(s)
   Local<ObjectTemplate> prottpl = tpl->PrototypeTemplate();
-  prottpl->Set(String::NewSymbol("emit"), FunctionTemplate::New(Emit)->GetFunction());
-  prottpl->Set(String::NewSymbol("iter"), FunctionTemplate::New(Iterate)->GetFunction());
-  prottpl->Set(String::NewSymbol("execute"), FunctionTemplate::New(Execute)->GetFunction());
+  DEFINE_JS_METHOD(prottpl, "emit", Emit);
+  DEFINE_JS_METHOD(prottpl, "iter", Iterate);
+  DEFINE_JS_METHOD(prottpl, "execute", Execute);
 
   Persistent<Function> ctor = Persistent<Function>::New(tpl->GetFunction());
   target->Set(String::NewSymbol("MapReduce"), ctor);
