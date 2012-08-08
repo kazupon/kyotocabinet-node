@@ -9,9 +9,9 @@ kyotocabinet bindings for Node.js
 - Linux
 - Mac OS X
 
-## modules
+## Dependencies
 
-- node-gyp
+- Git
 
 
 # Building
