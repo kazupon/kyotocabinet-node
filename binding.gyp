@@ -5,25 +5,32 @@
     }, 
     'target_defaults': {
         # HACK:S resolve exception throw compile error !!
+        'cflags!': [ '-fno-rtti', '-fno-exceptions' ],
+        'cflags_cc!': [ '-fno-rtti', '-fno-exceptions' ],
         'cflags': [ '-fexceptions' ],
         'cflags_cc': [ '-fexceptions' ],
-        'cflags!': [ '-fno-exceptions' ],
-        'cflags_cc!': [ '-fno-exception' ],
         # HACK:E resolve exception throw compile error !!
         'configurations': {
             'Debug': {
                 'defines': [ 'DEBUG', '_DEBUG' ]
             },
             'Release': {
+                'defines': [ 'NDEBUG' ]
             }
         },
     },
     'targets': [{
         'target_name': 'kyotocabinet',
         'dependencies': [
-          'kyotocabinet_core'
+            'kyotocabinet_core'
         ],
         'sources': [
+            './src/utils.cc',
+            './src/async.cc',
+            './src/error_wrap.cc',
+            './src/visitor_wrap.cc',
+            './src/cursor_wrap.cc',
+            './src/mapreduce_wrap.cc',
             './src/polydb_wrap.cc',
             './src/kyotocabinet.cc'
         ],
@@ -33,8 +40,8 @@
         'include_dirs': [
             '<(kyotocabinet_shared_include_dir)'
         ], 
-        'cflags': [ '-fcxx-exceptions' ],
-        'ldflags': [],
+        'cflags': [ '-g', '-O0' ],
+        'ldflags': [ '-lz' ],
         'conditions': [[
             'OS == "win"', {
             }
@@ -44,7 +51,8 @@
         ], [
             'OS=="mac"', {
                 'xcode_settings': {
-                    'GCC_ENABLE_CPP_EXCEPTIONS': 'YES'
+                    'GCC_ENABLE_CPP_EXCEPTIONS': 'YES',
+                    'GCC_ENABLE_CPP_RTTI': 'YES'
                 }
             }
         ]]

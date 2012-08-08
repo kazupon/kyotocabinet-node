@@ -14,14 +14,16 @@
         "url": "https://github.com/kazupon/kyotocabinet-node/issues"
     },
     "dependencies": {
+        "node-gyp": "0.6.3",
         "bindings": "1.0.0"
     },
     "devDependencies": {
-        "vows": ">= 0.6.3"
+        "mocha": "1.2.2",
+        "should": "0.6.3"
     },
     "os": [ "darwin", "linux" ],
-    "cpu": [ "x64", "ia32" ],
+    "cpu": [ "x64" ],
     "engines": {
-        "node": ">= 0.8.0"
+        "node": ">= 0.8.4"
     }
 }
