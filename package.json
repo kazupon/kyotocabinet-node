@@ -1,7 +1,7 @@
 {
     "name": "kyotocabinet-node",
     "main": "./lib/kyotocabinet",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "kyotocabinet bindings for Node.js",
     "tags": ["kyotocabinet"],
     "keywords": ["kyotocabinet", "binding"],

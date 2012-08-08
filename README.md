@@ -24,6 +24,11 @@ kyotocabinet bindings for Node.js
     $ npm install kyotocabient-node
 
 
+# Examples
+
+See the `example` directory.
+
+
 # Running Tests
 
 kyotocabient-node depends on [mocha](http://visionmedia.github.com/mocha/) for testing.
