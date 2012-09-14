@@ -43,13 +43,13 @@ enum kc_async_mapreduce_kind_t {
   MapReduceWrap *wrapmapreduce; \
   kc_mapreduce_req_kind_t type; \
   PolyDB::Error::Code result;   \
-  Persistent<Function> cb;      \
+  Persistent<Function> cb
 
 // common async request fields
 #define KC_ASYNC_MAPREDUCE_REQ_FIELD  \
   Persistent<Function> cb;            \
   AtomicInt64 done;                   \
-  kc_async_mapreduce_kind_t type;     \
+  kc_async_mapreduce_kind_t type
 
 // mapreduce request
 typedef struct kc_mapreduce_req_s {

@@ -24,7 +24,7 @@ enum kc_async_kind_t {
 #define KC_ASYNC_REQ_FIELD    \
   Persistent<Object> cb;      \
   AtomicInt64 done;           \
-  kc_async_kind_t type;       \
+  kc_async_kind_t type
 
 
 // async base request

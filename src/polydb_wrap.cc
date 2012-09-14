@@ -48,7 +48,7 @@ namespace kc = kyotocabinet;
                                                                                     \
     obj->Ref();                                                                     \
     return scope.Close(args.This());                                                \
-  }                                                                                 \
+  }
 
 #define DEFINE_CHAR_PARAM_FUNC(Name, Type)                                            \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                             \
@@ -90,7 +90,7 @@ namespace kc = kyotocabinet;
                                                                                       \
     obj->Ref();                                                                       \
     return scope.Close(args.This());                                                  \
-  }                                                                                   \
+  }
 
 #define DEFINE_BOOL_PARAM_FUNC(Name, Method, INIT_VALUE)                        \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                       \
@@ -153,7 +153,7 @@ namespace kc = kyotocabinet;
     }                                                                           \ 
                                                                                 \ 
     return scope.Close(args.This());                                            \
-  }                                                                             \
+  }
 
 #define DEFINE_RET_FUNC(Name, Type, REQ_TYPE, INIT_VALUE)                           \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                           \
@@ -184,7 +184,7 @@ namespace kc = kyotocabinet;
                                                                                     \
     obj->Ref();                                                                     \
     return scope.Close(args.This());                                                \
-  }                                                                                 \
+  }
 
 #define DEFINE_KV_K_ONLY(Name, Type)                                            \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                       \
@@ -241,7 +241,7 @@ namespace kc = kyotocabinet;
                                                                                 \
     obj->Ref();                                                                 \
     return scope.Close(args.This());                                            \
-  }                                                                             \
+  }
 
 #define DEFINE_KV_FUNC(Name, Type)                                              \
   Handle<Value> PolyDBWrap::Name(const Arguments &args) {                       \
@@ -318,12 +318,12 @@ namespace kc = kyotocabinet;
                                                                                 \
     obj->Ref();                                                                 \
     return scope.Close(args.This());                                            \
-  }                                                                             \
+  }
 
 #define DO_EXECUTE(Method)              \
   if (!db->Method()) {                  \
     req->result = db->error().code();   \
-  }                                     \
+  }
 
 #define DO_CHAR_PARAM_CMN_EXECUTE(Method, WorkReq)                              \
   kc_char_cmn_req_t *req = reinterpret_cast<kc_char_cmn_req_t*>(WorkReq->data); \
@@ -333,13 +333,13 @@ namespace kc = kyotocabinet;
     if (!db->Method(req->str)) {                                                \
       req->result = db->error().code();                                         \
     }                                                                           \
-  }                                                                             \
+  }
 
 #define DO_BOOL_PARAM_CMN_EXECUTE(Method, WorkReq)                                     \
   kc_boolean_cmn_req_t *req = reinterpret_cast<kc_boolean_cmn_req_t*>(WorkReq->data);  \
   if (!db->Method(req->flag)) {                                                        \
     req->result = db->error().code();                                                  \
-  }                                                                                    \
+  }
 
 #define DO_RET_EXECUTE(Method, WorkReq)                                  \
   kc_ret_req_t *req = reinterpret_cast<kc_ret_req_t*>(WorkReq->data);    \
@@ -347,7 +347,7 @@ namespace kc = kyotocabinet;
   TRACE("%s: ret = %d\n", #Method, req->ret);                            \
   if (req->ret == -1) {                                                  \
     req->result = db->error().code();                                    \
-  }                                                                      \
+  }
 
 #define DO_KV_V_RET_EXECUTE(Method, WorkReq)                                         \
   kc_kv_req_t *req = reinterpret_cast<kc_kv_req_t*>(WorkReq->data);                  \
@@ -360,7 +360,7 @@ namespace kc = kyotocabinet;
     if (req->value == NULL) {                                                        \
       req->result = db->error().code();                                              \
     }                                                                                \
-  }                                                                                  \
+  }
 
 #define DO_KV_EXECUTE(Method, WorkReq)                                 \
   kc_kv_req_t *req = reinterpret_cast<kc_kv_req_t*>(WorkReq->data);    \
@@ -372,7 +372,7 @@ namespace kc = kyotocabinet;
                     req->value, strlen(req->value))) {                 \
       req->result = db->error().code();                                \
     }                                                                  \
-  }                                                                    \
+  }
 
 #define DO_MATCH_CMN_EXECUTE(Method, WorkReq)                                               \
   kc_match_cmn_req_t *req = reinterpret_cast<kc_match_cmn_req_t*>(WorkReq->data);           \
@@ -385,7 +385,7 @@ namespace kc = kyotocabinet;
     if (num <= 0) {                                                                         \
       req->result = db->error().code();                                                     \
     }                                                                                       \
-  }                                                                                         \
+  }
 
 
 // request type
@@ -432,14 +432,14 @@ enum kc_req_type {
   PolyDBWrap *wrapdb;           \
   kc_req_type type;             \
   PolyDB::Error::Code result;   \
-  Persistent<Function> cb;      \
+  Persistent<Function> cb
 
 typedef std::map<std::string, std::string> StringMap;
 typedef std::vector<std::string> StringVector;
 
 // base request
 typedef struct kc_req_t {
-  KC_REQ_FIELD
+  KC_REQ_FIELD;
 } kc_req_t;
 
 // open request
@@ -533,7 +533,7 @@ typedef struct kc_remove_bulk_req_s {
 #define KC_MATCH_REQ_FIELD    \
   char *str;                  \
   int64_t max;                \
-  StringVector *keys;         \
+  StringVector *keys
 
 // match common request
 typedef struct kc_match_cmn_req_s {

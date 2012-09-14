@@ -30,7 +30,7 @@ namespace kc = kyotocabinet;
   req->writable = Writable;                                       \
   req->visitor.Clear();                                           \
   req->cb.Clear();                                                \
-  TRACE("type = %d\n", req->type);                                \
+  TRACE("type = %d\n", req->type)
 
 
 // request type
@@ -54,7 +54,7 @@ enum kc_cur_req_type {
   CursorWrap *wrapcur;          \
   kc_cur_req_type type;         \
   PolyDB::Error::Code result;   \
-  Persistent<Function> cb;      \
+  Persistent<Function> cb
 
 // cursor base request
 typedef struct kc_cur_req_s {
