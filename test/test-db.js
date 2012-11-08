@@ -5781,6 +5781,7 @@ describe('DB class tests', function () {
     // 
     // mapreduce (async)
     //
+    /*
     describe('mapreduce', function () {
       describe('db not open', function () {
         it('should be `INVALID` error', function (done) {
@@ -6448,6 +6449,7 @@ describe('DB class tests', function () {
         });
       });
     });
+    */
 
 
 
