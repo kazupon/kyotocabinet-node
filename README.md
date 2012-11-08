@@ -4,11 +4,6 @@ kyotocabinet bindings for Node.js
 
 # Requirements
 
-## OS
-
-- Linux
-- Mac OS X
-
 ## Dependencies
 
 - Git
@@ -33,7 +28,7 @@ See the `example` directory.
 
 kyotocabient-node depends on [mocha](http://visionmedia.github.com/mocha/) for testing.
 
-    $ mocha test/*.js
+    $ mocha --timeout 10000 test/*.js
 
 
 # License
