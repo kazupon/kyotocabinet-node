@@ -41,12 +41,12 @@
             '<(kyotocabinet_shared_include_dir)'
         ], 
         'cflags': [ '-g', '-O0' ],
-        'ldflags': [ '-lz' ],
         'conditions': [[
             'OS == "win"', {
             }
         ], [
             'OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="solaris"', {
+                'ldflags': [ '-lz', '-lstdc++', '-lrt', '-lpthread', '-lm', '-lc' ],
             }
         ], [
             'OS=="mac"', {
