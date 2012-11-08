@@ -11,6 +11,7 @@
 #include "debug.h"
 #include "utils.h"
 #include <assert.h>
+#include <stdlib.h>
 #include <kcdb.h>
 #include <pthread.h>
 

@@ -9,6 +9,7 @@
 #include "cursor_wrap.h"
 #include "async.h"
 #include <assert.h>
+#include <stdlib.h>
 #include "debug.h"
 #include "utils.h"
 #include <kcdbext.h>

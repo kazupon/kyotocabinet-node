@@ -9,6 +9,7 @@
 #include "debug.h"
 #include "utils.h"
 #include <assert.h>
+#include <stdlib.h>
 
 using namespace v8;
 using namespace kyotocabinet;
