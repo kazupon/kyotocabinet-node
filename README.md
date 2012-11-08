@@ -1,6 +1,8 @@
 # kyotocabient-node
 kyotocabinet bindings for Node.js
 
+[![Build Status](https://secure.travis-ci.org/kazupon/kyotocabinet-node.png?branch=dev)](https://travis-ci.org/kazupon/kyotocabinet-node)
+
 
 # Requirements
 
