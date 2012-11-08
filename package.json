@@ -1,7 +1,7 @@
 {
     "name": "kyotocabinet-node",
     "main": "./lib/kyotocabinet",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "description": "kyotocabinet bindings for Node.js",
     "tags": ["kyotocabinet"],
     "keywords": ["kyotocabinet", "binding"],
@@ -14,15 +14,15 @@
         "url": "https://github.com/kazupon/kyotocabinet-node/issues"
     },
     "dependencies": {
-        "node-gyp": "0.6.3",
         "bindings": "1.0.0"
     },
     "devDependencies": {
-        "mocha": "1.2.2",
-        "should": "0.6.3"
+        "mocha": "*",
+        "should": "*"
     },
-    "os": [ "darwin", "linux" ],
-    "cpu": [ "x64" ],
+    "scripts": {
+      "test": "make && make test"
+    },
     "engines": {
         "node": ">= 0.8.4"
     }
