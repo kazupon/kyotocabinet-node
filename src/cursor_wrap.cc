@@ -121,7 +121,7 @@ void CursorWrap::SendAsyncRequest(void *req) {
   uv_req->data = req;
   TRACE("uv_work_t = %p, type = %d\n", uv_req, ((kc_cur_req_t *)req)->type);
 
-  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, OnWorkDone);
+  int ret = uv_queue_work(uv_default_loop(), uv_req, OnWork, (uv_after_work_cb)OnWorkDone);
   TRACE("uv_queue_work: ret=%d\n", ret);
 }
 
