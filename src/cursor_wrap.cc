@@ -759,9 +759,9 @@ void CursorWrap::OnWork(uv_work_t *work_req) {
 }
 
 
-void CursorWrap::OnWorkDone(uv_work_t *work_req) {
+void CursorWrap::OnWorkDone(uv_work_t *work_req, int status) {
   HandleScope scope;
-  TRACE("argument: work_req=%p\n", work_req);
+  TRACE("argument: work_req=%p, status=%d\n", work_req, status);
 
   kc_cur_req_t *req = reinterpret_cast<kc_cur_req_t*>(work_req->data);
   assert(req != NULL);

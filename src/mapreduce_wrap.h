@@ -60,7 +60,7 @@ class MapReduceWrap : public ObjectWrap, kyotocabinet::MapReduce {
     static Handle<Value> Execute(const Arguments &args);
 
     static void OnWork(uv_work_t *work_req);
-    static void OnWorkDone(uv_work_t *work_req);
+    static void OnWorkDone(uv_work_t *work_req,int);
     static void OnAsyncRequestNotifier(uv_async_t *notifier, int status);
 };
 
