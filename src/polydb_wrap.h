@@ -73,7 +73,7 @@ class PolyDBWrap : public ObjectWrap {
     static Handle<Value> MapReduce(const Arguments &args);
     
     static void OnWork(uv_work_t *work_req);
-    static void OnWorkDone(uv_work_t *work_req);
+    static void OnWorkDone(uv_work_t *work_req,int);
 
     static void SendAsyncRequest(void *req);
 };

@@ -2211,8 +2211,8 @@ void PolyDBWrap::OnWork(uv_work_t *work_req) {
 }
 
 
-void PolyDBWrap::OnWorkDone(uv_work_t *work_req) {
-  TRACE("argument: work_req=%p\n", work_req);
+void PolyDBWrap::OnWorkDone(uv_work_t *work_req,int status) {
+  TRACE("argument: work_req=%p, status %d\n", work_req,status);
   HandleScope scope;
 
   kc_req_t *req = static_cast<kc_req_t *>(work_req->data);

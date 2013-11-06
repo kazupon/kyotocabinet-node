@@ -44,7 +44,7 @@ class CursorWrap : public ObjectWrap {
     static Handle<Value> Accept(const Arguments &args);
 
     static void OnWork(uv_work_t *work_req);
-    static void OnWorkDone(uv_work_t *work_req);
+    static void OnWorkDone(uv_work_t *work_req,int);
 
     void SetWrapDB(PolyDBWrap *wrapdb);
     static void SendAsyncRequest(void *req);
