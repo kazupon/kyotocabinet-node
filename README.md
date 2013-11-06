@@ -1,6 +1,8 @@
 # kyotocabient-node
 kyotocabinet bindings for Node.js
 
+* added some updates for protocol changes in nodejs-0.10 (libuv) *
+
 
 # Requirements
 
