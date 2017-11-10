@@ -31,7 +31,7 @@ See the `example` directory.
 
 # Running Tests
 
-kyotocabient-node depends on [mocha](http://visionmedia.github.com/mocha/) for testing.
+kyotocabient-node depends on [mocha](http://mochajs.org/) for testing.
 
     $ mocha test/*.js
 
